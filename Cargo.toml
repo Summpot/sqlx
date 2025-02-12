@@ -10,6 +10,7 @@ members = [
     "sqlx-mysql",
     "sqlx-postgres",
     "sqlx-sqlite",
+    "sqlx-clickhouse",
     "examples/mysql/todos",
     "examples/postgres/axum-social-with-tests",
     "examples/postgres/chat",

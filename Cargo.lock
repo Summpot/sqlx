@@ -3549,6 +3549,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlx-clickhouse"
+version = "0.8.3"
+dependencies = [
+ "atoi",
+ "base64 0.22.1",
+ "bigdecimal",
+ "bit-vec",
+ "bitflags 2.7.0",
+ "byteorder",
+ "chrono",
+ "crc",
+ "dotenvy",
+ "etcetera",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "hex",
+ "hkdf",
+ "hmac",
+ "home",
+ "ipnetwork",
+ "itoa",
+ "log",
+ "mac_address",
+ "md-5",
+ "memchr",
+ "num-bigint",
+ "once_cell",
+ "rand",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2",
+ "smallvec",
+ "sqlx",
+ "sqlx-core",
+ "stringprep",
+ "thiserror 2.0.11",
+ "time",
+ "tracing",
+ "uuid",
+ "whoami",
+]
+
+[[package]]
 name = "sqlx-core"
 version = "0.8.3"
 dependencies = [
@@ -3582,7 +3627,6 @@ dependencies = [
  "rust_decimal",
  "rustls",
  "rustls-native-certs",
- "rustls-pki-types",
  "serde",
  "serde_json",
  "sha2",
