@@ -50,6 +50,7 @@ sqlx-core = { workspace = true, features = ["offline"] }
 sqlx-mysql = { workspace = true, features = ["offline", "migrate"], optional = true }
 sqlx-postgres = { workspace = true, features = ["offline", "migrate"], optional = true }
 sqlx-sqlite = { workspace = true, features = ["offline", "migrate"], optional = true }
+sqlx-clickhouse = { workspace = true, features = ["offline", "migrate"], optional = true }
 
 async-std = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
