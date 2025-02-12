@@ -2,12 +2,12 @@ use sqlx_core::bytes::Buf;
 use std::num::Saturating;
 
 use crate::error::BoxDynError;
-use crate::PgArgumentBuffer;
+use crate::ClickHouseArgumentBuffer;
 
-/// Represents a `NUMERIC` value in the **Postgres** wire protocol.
+/// Represents a `NUMERIC` value in the **ClickHouse** wire protocol.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum PgNumeric {
-    /// Equivalent to the `'NaN'` value in Postgres. The result of, e.g. `1 / 0`.
+pub(crate) enum ClickHouseNumeric {
+    /// Equivalent to the `'NaN'` value in ClickHouse. The result of, e.g. `1 / 0`.
     NotANumber,
 
     /// A populated `NUMERIC` value.
@@ -17,7 +17,7 @@ pub(crate) enum PgNumeric {
     /// https://github.com/postgres/postgres/blob/bcd1c3630095e48bc3b1eb0fc8e8c8a7c851eba1/src/backend/utils/adt/numeric.c#L224-L269
     Number {
         /// The sign of the value: positive (also set for 0 and -0), or negative.
-        sign: PgNumericSign,
+        sign: ClickHouseNumericSign,
 
         /// The digits of the number in base-10000 with the most significant digit first
         /// (big-endian).
@@ -40,7 +40,7 @@ pub(crate) enum PgNumeric {
 
         /// How many _decimal_ (base-10) digits following the decimal point to consider in
         /// arithmetic regardless of how many actually follow the decimal point as determined by
-        /// `weight`--the comment in the Postgres code linked above recommends using this only for
+        /// `weight`--the comment in the ClickHouse code linked above recommends using this only for
         /// ignoring unnecessary trailing zeroes (as trimming nonzero digits means reducing the
         /// precision of the value).
         ///
@@ -54,31 +54,31 @@ const SIGN_POS: u16 = 0x0000;
 const SIGN_NEG: u16 = 0x4000;
 const SIGN_NAN: u16 = 0xC000; // overflows i16 (C equivalent truncates from integer literal)
 
-/// Possible sign values for [PgNumeric].
+/// Possible sign values for [ClickHouseNumeric].
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u16)]
-pub(crate) enum PgNumericSign {
+pub(crate) enum ClickHouseNumericSign {
     Positive = SIGN_POS,
     Negative = SIGN_NEG,
 }
 
-impl PgNumericSign {
+impl ClickHouseNumericSign {
     fn try_from_u16(val: u16) -> Result<Self, BoxDynError> {
         match val {
-            SIGN_POS => Ok(PgNumericSign::Positive),
-            SIGN_NEG => Ok(PgNumericSign::Negative),
+            SIGN_POS => Ok(ClickHouseNumericSign::Positive),
+            SIGN_NEG => Ok(ClickHouseNumericSign::Negative),
 
-            SIGN_NAN => unreachable!("sign value for NaN passed to PgNumericSign"),
+            SIGN_NAN => unreachable!("sign value for NaN passed to ClickHouseNumericSign"),
 
-            _ => Err(format!("invalid value for PgNumericSign: {val:#04X}").into()),
+            _ => Err(format!("invalid value for ClickHouseNumericSign: {val:#04X}").into()),
         }
     }
 }
 
-impl PgNumeric {
+impl ClickHouseNumeric {
     /// Equivalent value of `0::numeric`.
-    pub const ZERO: Self = PgNumeric::Number {
-        sign: PgNumericSign::Positive,
+    pub const ZERO: Self = ClickHouseNumeric::Number {
+        sign: ClickHouseNumericSign::Positive,
         digits: vec![],
         weight: 0,
         scale: 0,
@@ -113,12 +113,12 @@ impl PgNumeric {
         let scale = buf.get_i16();
 
         if sign == SIGN_NAN {
-            Ok(PgNumeric::NotANumber)
+            Ok(ClickHouseNumeric::NotANumber)
         } else {
             let digits: Vec<_> = (0..num_digits).map(|_| buf.get_i16()).collect::<_>();
 
-            Ok(PgNumeric::Number {
-                sign: PgNumericSign::try_from_u16(sign)?,
+            Ok(ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::try_from_u16(sign)?,
                 scale,
                 weight,
                 digits,
@@ -130,9 +130,9 @@ impl PgNumeric {
     ///
     /// * If `digits.len()` overflows `i16`
     /// * If any element in `digits` is greater than or equal to 10000
-    pub(crate) fn encode(&self, buf: &mut PgArgumentBuffer) -> Result<(), String> {
+    pub(crate) fn encode(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<(), String> {
         match *self {
-            PgNumeric::Number {
+            ClickHouseNumeric::Number {
                 ref digits,
                 sign,
                 scale,
@@ -140,7 +140,7 @@ impl PgNumeric {
             } => {
                 let digits_len = i16::try_from(digits.len()).map_err(|_| {
                     format!(
-                        "PgNumeric digits.len() ({}) should not overflow i16",
+                        "ClickHouseNumeric digits.len() ({}) should not overflow i16",
                         digits.len()
                     )
                 })?;
@@ -152,14 +152,14 @@ impl PgNumeric {
 
                 for (i, &digit) in digits.iter().enumerate() {
                     if !Self::is_valid_digit(digit) {
-                        return Err(format!("{i}th PgNumeric digit out of range: {digit}"));
+                        return Err(format!("{i}th ClickHouseNumeric digit out of range: {digit}"));
                     }
 
                     buf.extend(&digit.to_be_bytes());
                 }
             }
 
-            PgNumeric::NotANumber => {
+            ClickHouseNumeric::NotANumber => {
                 buf.extend(&0_i16.to_be_bytes());
                 buf.extend(&0_i16.to_be_bytes());
                 buf.extend(&SIGN_NAN.to_be_bytes());

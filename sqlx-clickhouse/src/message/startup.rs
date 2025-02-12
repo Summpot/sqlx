@@ -1,4 +1,4 @@
-use crate::io::PgBufMutExt;
+use crate::io::ClickHouseBufMutExt;
 use crate::io::{BufMutExt, ProtocolEncode};
 
 // To begin a session, a frontend opens a connection to the server and sends a startup message.

@@ -1,8 +1,8 @@
-//! Conversions between Rust and **Postgres** types.
+//! Conversions between Rust and **ClickHouse** types.
 //!
 //! # Types
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `bool`                                | BOOL                                                 |
 //! | `i8`                                  | "CHAR"                                               |
@@ -14,27 +14,27 @@
 //! | `&str`, [`String`]                    | VARCHAR, CHAR(N), TEXT, NAME, CITEXT                 |
 //! | `&[u8]`, `Vec<u8>`                    | BYTEA                                                |
 //! | `()`                                  | VOID                                                 |
-//! | [`PgInterval`]                        | INTERVAL                                             |
-//! | [`PgRange<T>`](PgRange)               | INT8RANGE, INT4RANGE, TSRANGE, TSTZRANGE, DATERANGE, NUMRANGE |
-//! | [`PgMoney`]                           | MONEY                                                |
-//! | [`PgLTree`]                           | LTREE                                                |
-//! | [`PgLQuery`]                          | LQUERY                                               |
-//! | [`PgCiText`]                          | CITEXT<sup>1</sup>                                   |
-//! | [`PgCube`]                            | CUBE                                                 |
-//! | [`PgPoint]                            | POINT                                                |
-//! | [`PgLine]                             | LINE                                                 |
-//! | [`PgLSeg]                             | LSEG                                                 |
-//! | [`PgBox]                              | BOX                                                  |
-//! | [`PgHstore`]                          | HSTORE                                               |
+//! | [`ClickHouseInterval`]                        | INTERVAL                                             |
+//! | [`ClickHouseRange<T>`](ClickHouseRange)               | INT8RANGE, INT4RANGE, TSRANGE, TSTZRANGE, DATERANGE, NUMRANGE |
+//! | [`ClickHouseMoney`]                           | MONEY                                                |
+//! | [`ClickHouseLTree`]                           | LTREE                                                |
+//! | [`ClickHouseLQuery`]                          | LQUERY                                               |
+//! | [`ClickHouseCiText`]                          | CITEXT<sup>1</sup>                                   |
+//! | [`ClickHouseCube`]                            | CUBE                                                 |
+//! | [`ClickHousePoint]                            | POINT                                                |
+//! | [`ClickHouseLine]                             | LINE                                                 |
+//! | [`ClickHouseLSeg]                             | LSEG                                                 |
+//! | [`ClickHouseBox]                              | BOX                                                  |
+//! | [`ClickHouseHstore`]                          | HSTORE                                               |
 //!
 //! <sup>1</sup> SQLx generally considers `CITEXT` to be compatible with `String`, `&str`, etc.,
-//! but this wrapper type is available for edge cases, such as `CITEXT[]` which Postgres
+//! but this wrapper type is available for edge cases, such as `CITEXT[]` which ClickHouse
 //! does not consider to be compatible with `TEXT[]`.
 //!
 //! ### [`bigdecimal`](https://crates.io/crates/bigdecimal)
 //! Requires the `bigdecimal` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                        |
+//! | Rust type                             | ClickHouse type(s)                                        |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `bigdecimal::BigDecimal`              | NUMERIC                                              |
 //!
@@ -43,7 +43,7 @@
 //! ### [`rust_decimal`](https://crates.io/crates/rust_decimal)
 //! Requires the `rust_decimal` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                        |
+//! | Rust type                             | ClickHouse type(s)                                        |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `rust_decimal::Decimal`               | NUMERIC                                              |
 //!
@@ -53,32 +53,32 @@
 //!
 //! Requires the `chrono` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `chrono::DateTime<Utc>`               | TIMESTAMPTZ                                          |
 //! | `chrono::DateTime<Local>`             | TIMESTAMPTZ                                          |
 //! | `chrono::NaiveDateTime`               | TIMESTAMP                                            |
 //! | `chrono::NaiveDate`                   | DATE                                                 |
 //! | `chrono::NaiveTime`                   | TIME                                                 |
-//! | [`PgTimeTz`]                          | TIMETZ                                               |
+//! | [`ClickHouseTimeTz`]                          | TIMETZ                                               |
 //!
 //! ### [`time`](https://crates.io/crates/time)
 //!
 //! Requires the `time` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `time::PrimitiveDateTime`             | TIMESTAMP                                            |
 //! | `time::OffsetDateTime`                | TIMESTAMPTZ                                          |
 //! | `time::Date`                          | DATE                                                 |
 //! | `time::Time`                          | TIME                                                 |
-//! | [`PgTimeTz`]                          | TIMETZ                                               |
+//! | [`ClickHouseTimeTz`]                          | TIMETZ                                               |
 //!
 //! ### [`uuid`](https://crates.io/crates/uuid)
 //!
 //! Requires the `uuid` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `uuid::Uuid`                          | UUID                                                 |
 //!
@@ -86,7 +86,7 @@
 //!
 //! Requires the `ipnetwork` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `ipnetwork::IpNetwork`                | INET, CIDR                                           |
 //! | `std::net::IpAddr`                    | INET, CIDR                                           |
@@ -101,7 +101,7 @@
 //!
 //! Requires the `mac_address` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `mac_address::MacAddress`             | MACADDR                                              |
 //!
@@ -109,7 +109,7 @@
 //!
 //! Requires the `bit-vec` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | `bit_vec::BitVec`                     | BIT, VARBIT                                          |
 //!
@@ -117,16 +117,16 @@
 //!
 //! Requires the `json` Cargo feature flag.
 //!
-//! | Rust type                             | Postgres type(s)                                     |
+//! | Rust type                             | ClickHouse type(s)                                     |
 //! |---------------------------------------|------------------------------------------------------|
 //! | [`Json<T>`]                           | JSON, JSONB                                          |
 //! | `serde_json::Value`                   | JSON, JSONB                                          |
 //! | `&serde_json::value::RawValue`        | JSON, JSONB                                          |
 //!
 //! `Value` and `RawValue` from `serde_json` can be used for unstructured JSON data with
-//! Postgres.
+//! ClickHouse.
 //!
-//! [`Json<T>`](crate::types::Json) can be used for structured JSON data with Postgres.
+//! [`Json<T>`](crate::types::Json) can be used for structured JSON data with ClickHouse.
 //!
 //! # [Composite types](https://www.postgresql.org/docs/current/rowtypes.html)
 //!
@@ -151,7 +151,7 @@
 //! ```
 //!
 //! Anonymous composite types are represented as tuples. Note that anonymous composites may only
-//! be returned and not sent to Postgres (this is a limitation of postgres).
+//! be returned and not sent to ClickHouse (this is a limitation of postgres).
 //!
 //! # Arrays
 //!
@@ -194,8 +194,8 @@
 //! definition.
 //!
 
-use crate::type_info::PgTypeKind;
-use crate::{PgTypeInfo, Postgres};
+use crate::type_info::ClickHouseTypeKind;
+use crate::{ClickHouseTypeInfo, ClickHouse};
 
 pub(crate) use sqlx_core::types::{Json, Type};
 
@@ -257,39 +257,39 @@ mod mac_address;
 #[cfg(feature = "bit-vec")]
 mod bit_vec;
 
-pub use array::PgHasArrayType;
-pub use citext::PgCiText;
-pub use cube::PgCube;
-pub use geometry::line::PgLine;
-pub use geometry::line_segment::PgLSeg;
-pub use geometry::point::PgPoint;
-pub use geometry::r#box::PgBox;
-pub use hstore::PgHstore;
-pub use interval::PgInterval;
-pub use lquery::PgLQuery;
-pub use lquery::PgLQueryLevel;
-pub use lquery::PgLQueryVariant;
-pub use lquery::PgLQueryVariantFlag;
-pub use ltree::PgLTree;
-pub use ltree::PgLTreeLabel;
-pub use ltree::PgLTreeParseError;
-pub use money::PgMoney;
+pub use array::ClickHouseHasArrayType;
+pub use citext::ClickHouseCiText;
+pub use cube::ClickHouseCube;
+pub use geometry::line::ClickHouseLine;
+pub use geometry::line_segment::ClickHouseLSeg;
+pub use geometry::point::ClickHousePoint;
+pub use geometry::r#box::ClickHouseBox;
+pub use hstore::ClickHouseHstore;
+pub use interval::ClickHouseInterval;
+pub use lquery::ClickHouseLQuery;
+pub use lquery::ClickHouseLQueryLevel;
+pub use lquery::ClickHouseLQueryVariant;
+pub use lquery::ClickHouseLQueryVariantFlag;
+pub use ltree::ClickHouseLTree;
+pub use ltree::ClickHouseLTreeLabel;
+pub use ltree::ClickHouseLTreeParseError;
+pub use money::ClickHouseMoney;
 pub use oid::Oid;
-pub use range::PgRange;
+pub use range::ClickHouseRange;
 
 #[cfg(any(feature = "chrono", feature = "time"))]
-pub use time_tz::PgTimeTz;
+pub use time_tz::ClickHouseTimeTz;
 
 // used in derive(Type) for `struct`
 // but the interface is not considered part of the public API
 #[doc(hidden)]
-pub use record::{PgRecordDecoder, PgRecordEncoder};
+pub use record::{ClickHouseRecordDecoder, ClickHouseRecordEncoder};
 
 // Type::compatible impl appropriate for arrays
-fn array_compatible<E: Type<Postgres> + ?Sized>(ty: &PgTypeInfo) -> bool {
+fn array_compatible<E: Type<ClickHouse> + ?Sized>(ty: &ClickHouseTypeInfo) -> bool {
     // we require the declared type to be an _array_ with an
     // element type that is acceptable
-    if let PgTypeKind::Array(element) = &ty.kind() {
+    if let ClickHouseTypeKind::Array(element) = &ty.kind() {
         return E::compatible(element);
     }
 

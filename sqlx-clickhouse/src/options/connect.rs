@@ -1,13 +1,13 @@
 use crate::connection::ConnectOptions;
 use crate::error::Error;
-use crate::{PgConnectOptions, PgConnection};
+use crate::{ClickHouseConnectOptions, ClickHouseConnection};
 use futures_core::future::BoxFuture;
 use log::LevelFilter;
 use sqlx_core::Url;
 use std::time::Duration;
 
-impl ConnectOptions for PgConnectOptions {
-    type Connection = PgConnection;
+impl ConnectOptions for ClickHouseConnectOptions {
+    type Connection = ClickHouseConnection;
 
     fn from_url(url: &Url) -> Result<Self, Error> {
         Self::parse_from_url(url)
@@ -21,7 +21,7 @@ impl ConnectOptions for PgConnectOptions {
     where
         Self::Connection: Sized,
     {
-        Box::pin(PgConnection::establish(self))
+        Box::pin(ClickHouseConnection::establish(self))
     }
 
     fn log_statements(mut self, level: LevelFilter) -> Self {

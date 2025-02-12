@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::array_compatible;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue as JsonRawValue;
 use serde_json::Value as JsonValue;
@@ -14,55 +14,55 @@ pub(crate) use sqlx_core::types::{Json, Type};
 // unless there are quite specialized needs, such as legacy assumptions
 // about ordering of object keys.
 
-impl<T> Type<Postgres> for Json<T> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::JSONB
+impl<T> Type<ClickHouse> for Json<T> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::JSONB
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
-        *ty == PgTypeInfo::JSON || *ty == PgTypeInfo::JSONB
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
+        *ty == ClickHouseTypeInfo::JSON || *ty == ClickHouseTypeInfo::JSONB
     }
 }
 
-impl<T> PgHasArrayType for Json<T> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::JSONB_ARRAY
+impl<T> ClickHouseHasArrayType for Json<T> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::JSONB_ARRAY
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         array_compatible::<Json<T>>(ty)
     }
 }
 
-impl PgHasArrayType for JsonValue {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::JSONB_ARRAY
+impl ClickHouseHasArrayType for JsonValue {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::JSONB_ARRAY
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         array_compatible::<JsonValue>(ty)
     }
 }
 
-impl PgHasArrayType for JsonRawValue {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::JSONB_ARRAY
+impl ClickHouseHasArrayType for JsonRawValue {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::JSONB_ARRAY
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         array_compatible::<JsonRawValue>(ty)
     }
 }
 
-impl<'q, T> Encode<'q, Postgres> for Json<T>
+impl<'q, T> Encode<'q, ClickHouse> for Json<T>
 where
     T: Serialize,
 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         // we have a tiny amount of dynamic behavior depending if we are resolved to be JSON
         // instead of JSONB
-        buf.patch(|buf, ty: &PgTypeInfo| {
-            if *ty == PgTypeInfo::JSON || *ty == PgTypeInfo::JSON_ARRAY {
+        buf.patch(|buf, ty: &ClickHouseTypeInfo| {
+            if *ty == ClickHouseTypeInfo::JSON || *ty == ClickHouseTypeInfo::JSON_ARRAY {
                 buf[0] = b' ';
             }
         });
@@ -77,14 +77,14 @@ where
     }
 }
 
-impl<'r, T: 'r> Decode<'r, Postgres> for Json<T>
+impl<'r, T: 'r> Decode<'r, ClickHouse> for Json<T>
 where
     T: Deserialize<'r>,
 {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         let mut buf = value.as_bytes()?;
 
-        if value.format() == PgValueFormat::Binary && value.type_info == PgTypeInfo::JSONB {
+        if value.format() == ClickHouseValueFormat::Binary && value.type_info == ClickHouseTypeInfo::JSONB {
             assert_eq!(
                 buf[0], 1,
                 "unsupported JSONB format version {}; please open an issue",

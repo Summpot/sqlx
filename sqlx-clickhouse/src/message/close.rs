@@ -1,4 +1,4 @@
-use crate::io::{PgBufMutExt, PortalId, StatementId};
+use crate::io::{ClickHouseBufMutExt, PortalId, StatementId};
 use crate::message::{FrontendMessage, FrontendMessageFormat};
 use std::num::Saturating;
 

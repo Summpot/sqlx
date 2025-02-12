@@ -2,7 +2,7 @@ use sqlx_core::bytes::Bytes;
 use std::num::Saturating;
 
 use crate::error::Error;
-use crate::io::PgBufMutExt;
+use crate::io::ClickHouseBufMutExt;
 
 mod authentication;
 mod backend_key_data;
@@ -49,7 +49,7 @@ pub use parse_complete::ParseComplete;
 pub use password::Password;
 pub use query::Query;
 pub use ready_for_query::{ReadyForQuery, TransactionStatus};
-pub use response::{Notice, PgSeverity};
+pub use response::{Notice, ClickHouseSeverity};
 pub use row_description::RowDescription;
 pub use sasl::{SaslInitialResponse, SaslResponse};
 use sqlx_core::io::ProtocolEncode;
@@ -127,7 +127,7 @@ impl ReceivedMessage {
     {
         if T::FORMAT != self.format {
             return Err(err_protocol!(
-                "Postgres protocol error: expected {:?}, got {:?}",
+                "ClickHouse protocol error: expected {:?}, got {:?}",
                 T::FORMAT,
                 self.format
             ));
@@ -135,7 +135,7 @@ impl ReceivedMessage {
 
         T::decode_body(self.contents).map_err(|e| match e {
             Error::Protocol(s) => {
-                err_protocol!("Postgres protocol error (reading {:?}): {s}", self.format)
+                err_protocol!("ClickHouse protocol error (reading {:?}): {s}", self.format)
             }
             other => other,
         })
@@ -181,7 +181,7 @@ pub(crate) trait FrontendMessage: Sized {
     /// Return the amount of space, in bytes, to reserve in the buffer passed to [`Self::encode_body()`].
     fn body_size_hint(&self) -> Saturating<usize>;
 
-    /// Encode this type as a Frontend message in the Postgres protocol.
+    /// Encode this type as a Frontend message in the ClickHouse protocol.
     ///
     /// The implementation should *not* include `Self::FORMAT` or the length prefix.
     fn encode_body(&self, buf: &mut Vec<u8>) -> Result<(), Error>;
@@ -199,7 +199,7 @@ pub(crate) trait BackendMessage: Sized {
     /// <https://www.postgresql.org/docs/current/protocol-message-formats.html>
     const FORMAT: BackendMessageFormat;
 
-    /// Decode this type from a Backend message in the Postgres protocol.
+    /// Decode this type from a Backend message in the ClickHouse protocol.
     ///
     /// The format code and length prefix have already been read and are not at the start of `bytes`.
     fn decode_body(buf: Bytes) -> Result<Self, Error>;
@@ -216,7 +216,7 @@ impl<F: FrontendMessage> ProtocolEncode<'_, ()> for EncodeMessage<F> {
         // don't panic if `size_hint` is ridiculous
         buf.try_reserve(size_hint.0).map_err(|e| {
             err_protocol!(
-                "Postgres protocol: error allocating {} bytes for encoding message {:?}: {e}",
+                "ClickHouse protocol: error allocating {} bytes for encoding message {:?}: {e}",
                 size_hint.0,
                 F::FORMAT,
             )

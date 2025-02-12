@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::Cursor;
 use std::mem;
@@ -23,19 +23,19 @@ type DefaultOffset = ::chrono::FixedOffset;
 ///
 /// # Warning
 ///
-/// `PgTimeTz` provides `TIMETZ` and is supported only for reading from legacy databases.
-/// [PostgreSQL recommends] to use `TIMESTAMPTZ` instead.
+/// `ClickHouseTimeTz` provides `TIMETZ` and is supported only for reading from legacy databases.
+/// [ClickHouse recommends] to use `TIMESTAMPTZ` instead.
 ///
-/// [PostgreSQL recommends]: https://wiki.postgresql.org/wiki/Don't_Do_This#Don.27t_use_timetz
+/// [ClickHouse recommends]: https://wiki.postgresql.org/wiki/Don't_Do_This#Don.27t_use_timetz
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct PgTimeTz<Time = DefaultTime, Offset = DefaultOffset> {
+pub struct ClickHouseTimeTz<Time = DefaultTime, Offset = DefaultOffset> {
     pub time: Time,
     pub offset: Offset,
 }
 
-impl<Time, Offset> PgHasArrayType for PgTimeTz<Time, Offset> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMETZ_ARRAY
+impl<Time, Offset> ClickHouseHasArrayType for ClickHouseTimeTz<Time, Offset> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMETZ_ARRAY
     }
 }
 
@@ -44,17 +44,17 @@ mod chrono {
     use super::*;
     use ::chrono::{DateTime, Duration, FixedOffset, NaiveTime};
 
-    impl Type<Postgres> for PgTimeTz<NaiveTime, FixedOffset> {
-        fn type_info() -> PgTypeInfo {
-            PgTypeInfo::TIMETZ
+    impl Type<ClickHouse> for ClickHouseTimeTz<NaiveTime, FixedOffset> {
+        fn type_info() -> ClickHouseTypeInfo {
+            ClickHouseTypeInfo::TIMETZ
         }
     }
 
-    impl Encode<'_, Postgres> for PgTimeTz<NaiveTime, FixedOffset> {
-        fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
-            let _: IsNull = <NaiveTime as Encode<'_, Postgres>>::encode(self.time, buf)?;
+    impl Encode<'_, ClickHouse> for ClickHouseTimeTz<NaiveTime, FixedOffset> {
+        fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
+            let _: IsNull = <NaiveTime as Encode<'_, ClickHouse>>::encode(self.time, buf)?;
             let _: IsNull =
-                <i32 as Encode<'_, Postgres>>::encode(self.offset.utc_minus_local(), buf)?;
+                <i32 as Encode<'_, ClickHouse>>::encode(self.offset.utc_minus_local(), buf)?;
 
             Ok(IsNull::No)
         }
@@ -64,10 +64,10 @@ mod chrono {
         }
     }
 
-    impl<'r> Decode<'r, Postgres> for PgTimeTz<NaiveTime, FixedOffset> {
-        fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    impl<'r> Decode<'r, ClickHouse> for ClickHouseTimeTz<NaiveTime, FixedOffset> {
+        fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
             match value.format() {
-                PgValueFormat::Binary => {
+                ClickHouseValueFormat::Binary => {
                     let mut buf = Cursor::new(value.as_bytes()?);
 
                     // TIME is encoded as the microseconds since midnight
@@ -85,15 +85,15 @@ mod chrono {
                         )
                     })?;
 
-                    Ok(PgTimeTz { time, offset })
+                    Ok(ClickHouseTimeTz { time, offset })
                 }
 
-                PgValueFormat::Text => try_parse_timetz(value.as_str()?),
+                ClickHouseValueFormat::Text => try_parse_timetz(value.as_str()?),
             }
         }
     }
 
-    fn try_parse_timetz(s: &str) -> Result<PgTimeTz<NaiveTime, FixedOffset>, BoxDynError> {
+    fn try_parse_timetz(s: &str) -> Result<ClickHouseTimeTz<NaiveTime, FixedOffset>, BoxDynError> {
         let mut tmp = String::with_capacity(11 + s.len());
         tmp.push_str("2001-07-08 ");
         tmp.push_str(s);
@@ -106,7 +106,7 @@ mod chrono {
                     let time = dt.time();
                     let offset = *dt.offset();
 
-                    return Ok(PgTimeTz { time, offset });
+                    return Ok(ClickHouseTimeTz { time, offset });
                 }
 
                 Err(error) => {
@@ -126,17 +126,17 @@ mod time {
     use super::*;
     use ::time::{Duration, Time, UtcOffset};
 
-    impl Type<Postgres> for PgTimeTz<Time, UtcOffset> {
-        fn type_info() -> PgTypeInfo {
-            PgTypeInfo::TIMETZ
+    impl Type<ClickHouse> for ClickHouseTimeTz<Time, UtcOffset> {
+        fn type_info() -> ClickHouseTypeInfo {
+            ClickHouseTypeInfo::TIMETZ
         }
     }
 
-    impl Encode<'_, Postgres> for PgTimeTz<Time, UtcOffset> {
-        fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
-            let _: IsNull = <Time as Encode<'_, Postgres>>::encode(self.time, buf)?;
+    impl Encode<'_, ClickHouse> for ClickHouseTimeTz<Time, UtcOffset> {
+        fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
+            let _: IsNull = <Time as Encode<'_, ClickHouse>>::encode(self.time, buf)?;
             let _: IsNull =
-                <i32 as Encode<'_, Postgres>>::encode(-self.offset.whole_seconds(), buf)?;
+                <i32 as Encode<'_, ClickHouse>>::encode(-self.offset.whole_seconds(), buf)?;
 
             Ok(IsNull::No)
         }
@@ -146,10 +146,10 @@ mod time {
         }
     }
 
-    impl<'r> Decode<'r, Postgres> for PgTimeTz<Time, UtcOffset> {
-        fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    impl<'r> Decode<'r, ClickHouse> for ClickHouseTimeTz<Time, UtcOffset> {
+        fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
             match value.format() {
-                PgValueFormat::Binary => {
+                ClickHouseValueFormat::Binary => {
                     let mut buf = Cursor::new(value.as_bytes()?);
 
                     // TIME is encoded as the microseconds since midnight
@@ -159,13 +159,13 @@ mod time {
                     // OFFSET is encoded as seconds from UTC
                     let seconds = buf.read_i32::<BigEndian>()?;
 
-                    Ok(PgTimeTz {
+                    Ok(ClickHouseTimeTz {
                         time,
                         offset: -UtcOffset::from_whole_seconds(seconds)?,
                     })
                 }
 
-                PgValueFormat::Text => {
+                ClickHouseValueFormat::Text => {
                     // the `time` crate has a limited ability to parse and can't parse the
                     // timezone format
                     Err("reading a `TIMETZ` value in text format is not supported.".into())

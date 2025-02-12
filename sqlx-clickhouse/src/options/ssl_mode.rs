@@ -1,11 +1,11 @@
 use crate::error::Error;
 use std::str::FromStr;
 
-/// Options for controlling the level of protection provided for PostgreSQL SSL connections.
+/// Options for controlling the level of protection provided for ClickHouse SSL connections.
 ///
-/// It is used by the [`ssl_mode`](super::PgConnectOptions::ssl_mode) method.
+/// It is used by the [`ssl_mode`](super::ClickHouseConnectOptions::ssl_mode) method.
 #[derive(Debug, Clone, Copy, Default)]
-pub enum PgSslMode {
+pub enum ClickHouseSslMode {
     /// Only try a non-SSL connection.
     Disable,
 
@@ -31,17 +31,17 @@ pub enum PgSslMode {
     VerifyFull,
 }
 
-impl FromStr for PgSslMode {
+impl FromStr for ClickHouseSslMode {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Error> {
         Ok(match &*s.to_ascii_lowercase() {
-            "disable" => PgSslMode::Disable,
-            "allow" => PgSslMode::Allow,
-            "prefer" => PgSslMode::Prefer,
-            "require" => PgSslMode::Require,
-            "verify-ca" => PgSslMode::VerifyCa,
-            "verify-full" => PgSslMode::VerifyFull,
+            "disable" => ClickHouseSslMode::Disable,
+            "allow" => ClickHouseSslMode::Allow,
+            "prefer" => ClickHouseSslMode::Prefer,
+            "require" => ClickHouseSslMode::Require,
+            "verify-ca" => ClickHouseSslMode::VerifyCa,
+            "verify-full" => ClickHouseSslMode::VerifyFull,
 
             _ => {
                 return Err(Error::Configuration(

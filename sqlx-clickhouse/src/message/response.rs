@@ -11,7 +11,7 @@ use crate::message::{BackendMessage, BackendMessageFormat};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
-pub enum PgSeverity {
+pub enum ClickHouseSeverity {
     Panic,
     Fatal,
     Error,
@@ -22,26 +22,26 @@ pub enum PgSeverity {
     Log,
 }
 
-impl PgSeverity {
+impl ClickHouseSeverity {
     #[inline]
     pub fn is_error(self) -> bool {
         matches!(self, Self::Panic | Self::Fatal | Self::Error)
     }
 }
 
-impl TryFrom<&str> for PgSeverity {
+impl TryFrom<&str> for ClickHouseSeverity {
     type Error = Error;
 
-    fn try_from(s: &str) -> Result<PgSeverity, Error> {
+    fn try_from(s: &str) -> Result<ClickHouseSeverity, Error> {
         let result = match s {
-            "PANIC" => PgSeverity::Panic,
-            "FATAL" => PgSeverity::Fatal,
-            "ERROR" => PgSeverity::Error,
-            "WARNING" => PgSeverity::Warning,
-            "NOTICE" => PgSeverity::Notice,
-            "DEBUG" => PgSeverity::Debug,
-            "INFO" => PgSeverity::Info,
-            "LOG" => PgSeverity::Log,
+            "PANIC" => ClickHouseSeverity::Panic,
+            "FATAL" => ClickHouseSeverity::Fatal,
+            "ERROR" => ClickHouseSeverity::Error,
+            "WARNING" => ClickHouseSeverity::Warning,
+            "NOTICE" => ClickHouseSeverity::Notice,
+            "DEBUG" => ClickHouseSeverity::Debug,
+            "INFO" => ClickHouseSeverity::Info,
+            "LOG" => ClickHouseSeverity::Log,
 
             severity => {
                 return Err(err_protocol!("unknown severity: {:?}", severity));
@@ -55,14 +55,14 @@ impl TryFrom<&str> for PgSeverity {
 #[derive(Debug)]
 pub struct Notice {
     storage: Bytes,
-    severity: PgSeverity,
+    severity: ClickHouseSeverity,
     message: Range<usize>,
     code: Range<usize>,
 }
 
 impl Notice {
     #[inline]
-    pub fn severity(&self) -> PgSeverity {
+    pub fn severity(&self) -> ClickHouseSeverity {
         self.severity
     }
 
@@ -110,10 +110,10 @@ impl Notice {
 
 impl ProtocolDecode<'_> for Notice {
     fn decode_with(buf: Bytes, _: ()) -> Result<Self, Error> {
-        // In order to support PostgreSQL 9.5 and older we need to parse the localized S field.
+        // In order to support ClickHouse 9.5 and older we need to parse the localized S field.
         // Newer versions additionally come with the V field that is guaranteed to be in English.
         // We thus read both versions and prefer the unlocalized one if available.
-        const DEFAULT_SEVERITY: PgSeverity = PgSeverity::Log;
+        const DEFAULT_SEVERITY: ClickHouseSeverity = ClickHouseSeverity::Log;
         let mut severity_v = None;
         let mut severity_s = None;
         let mut message = 0..0;
@@ -226,7 +226,7 @@ impl<'a> Iterator for Fields<'a> {
 fn notice_protocol_err() -> Error {
     // https://github.com/launchbadge/sqlx/issues/1144
     Error::Protocol(
-        "Postgres returned a non-UTF-8 string for its error message. \
+        "ClickHouse returned a non-UTF-8 string for its error message. \
          This is most likely due to an error that occurred during authentication and \
          the default lc_messages locale is not binary-compatible with UTF-8. \
          See the server logs for the error details."
@@ -245,7 +245,7 @@ fn test_decode_error_response() {
         "extension \"uuid-ossp\" already exists, skipping"
     );
 
-    assert!(matches!(m.severity(), PgSeverity::Notice));
+    assert!(matches!(m.severity(), ClickHouseSeverity::Notice));
     assert_eq!(m.code(), "42710");
 }
 

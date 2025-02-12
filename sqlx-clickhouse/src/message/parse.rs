@@ -1,5 +1,5 @@
 use crate::io::BufMutExt;
-use crate::io::{PgBufMutExt, StatementId};
+use crate::io::{ClickHouseBufMutExt, StatementId};
 use crate::message::{FrontendMessage, FrontendMessageFormat};
 use crate::types::Oid;
 use sqlx_core::Error;

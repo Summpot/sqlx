@@ -5,12 +5,12 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
-fn int_decode(value: PgValueRef<'_>) -> Result<i64, BoxDynError> {
+fn int_decode(value: ClickHouseValueRef<'_>) -> Result<i64, BoxDynError> {
     Ok(match value.format() {
-        PgValueFormat::Text => value.as_str()?.parse()?,
-        PgValueFormat::Binary => {
+        ClickHouseValueFormat::Text => value.as_str()?.parse()?,
+        ClickHouseValueFormat::Binary => {
             let buf = value.as_bytes()?;
 
             // Return error if buf is empty or is more than 8 bytes
@@ -32,33 +32,33 @@ fn int_decode(value: PgValueRef<'_>) -> Result<i64, BoxDynError> {
     })
 }
 
-impl Type<Postgres> for i8 {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::CHAR
+impl Type<ClickHouse> for i8 {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::CHAR
     }
 }
 
-impl PgHasArrayType for i8 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::CHAR_ARRAY
+impl ClickHouseHasArrayType for i8 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::CHAR_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for i8 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for i8 {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for i8 {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
-        // note: decoding here is for the `"char"` type as Postgres does not have a native 1-byte integer type.
+impl Decode<'_, ClickHouse> for i8 {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
+        // note: decoding here is for the `"char"` type as ClickHouse does not have a native 1-byte integer type.
         // https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/char.c#L58-L60
         match value.format() {
-            PgValueFormat::Binary => int_decode(value)?.try_into().map_err(Into::into),
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Binary => int_decode(value)?.try_into().map_err(Into::into),
+            ClickHouseValueFormat::Text => {
                 let text = value.as_str()?;
 
                 // A value of 0 is represented with the empty string.
@@ -79,98 +79,98 @@ impl Decode<'_, Postgres> for i8 {
     }
 }
 
-impl Type<Postgres> for i16 {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INT2
+impl Type<ClickHouse> for i16 {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT2
     }
 }
 
-impl PgHasArrayType for i16 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT2_ARRAY
+impl ClickHouseHasArrayType for i16 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT2_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for i16 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for i16 {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for i16 {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for i16 {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         int_decode(value)?.try_into().map_err(Into::into)
     }
 }
 
-impl Type<Postgres> for i32 {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INT4
+impl Type<ClickHouse> for i32 {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT4
     }
 }
 
-impl PgHasArrayType for i32 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT4_ARRAY
+impl ClickHouseHasArrayType for i32 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT4_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for i32 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for i32 {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for i32 {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for i32 {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         int_decode(value)?.try_into().map_err(Into::into)
     }
 }
 
-impl Type<Postgres> for i64 {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INT8
+impl Type<ClickHouse> for i64 {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT8
     }
 }
 
-impl PgHasArrayType for i64 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT8_ARRAY
+impl ClickHouseHasArrayType for i64 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT8_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for i64 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for i64 {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for i64 {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for i64 {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         int_decode(value)
     }
 }
 
-impl PgHasArrayType for NonZeroI16 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT2_ARRAY
+impl ClickHouseHasArrayType for NonZeroI16 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT2_ARRAY
     }
 }
 
-impl PgHasArrayType for NonZeroI32 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT4_ARRAY
+impl ClickHouseHasArrayType for NonZeroI32 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT4_ARRAY
     }
 }
 
-impl PgHasArrayType for NonZeroI64 {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT8_ARRAY
+impl ClickHouseHasArrayType for NonZeroI64 {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT8_ARRAY
     }
 }

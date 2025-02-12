@@ -1,7 +1,7 @@
-use crate::connection::stream::PgStream;
+use crate::connection::stream::ClickHouseStream;
 use crate::error::Error;
 use crate::message::{Authentication, AuthenticationSasl, SaslInitialResponse, SaslResponse};
-use crate::PgConnectOptions;
+use crate::ClickHouseConnectOptions;
 use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
@@ -16,8 +16,8 @@ const CLIENT_PROOF_ATTR: &str = "p";
 const NONCE_ATTR: &str = "r";
 
 pub(crate) async fn authenticate(
-    stream: &mut PgStream,
-    options: &PgConnectOptions,
+    stream: &mut ClickHouseStream,
+    options: &ClickHouseConnectOptions,
     data: AuthenticationSasl,
 ) -> Result<(), Error> {
     let mut has_sasl = false;

@@ -5,12 +5,12 @@ use std::borrow::Cow;
 use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
-use crate::type_info::PgType;
+use crate::type_info::ClickHouseType;
 use crate::types::Oid;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
-/// Provides information necessary to encode and decode Postgres arrays as compatible Rust types.
+/// Provides information necessary to encode and decode ClickHouse arrays as compatible Rust types.
 ///
 /// Implementing this trait for some type `T` enables relevant `Type`,`Encode` and `Decode` impls
 /// for `Vec<T>`, `&[T]` (slices), `[T; N]` (arrays), etc.
@@ -29,17 +29,17 @@ use crate::{PgArgumentBuffer, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
 ///    .await?;
 /// ```
 ///
-/// However, this may cause an error if the type being wrapped does not implement `PgHasArrayType`,
+/// However, this may cause an error if the type being wrapped does not implement `ClickHouseHasArrayType`,
 /// e.g. `Vec` itself, because we don't currently support multidimensional arrays:
 ///
 /// ```rust,ignore
-/// #[derive(sqlx::Type)] // ERROR: `Vec<i64>` does not implement `PgHasArrayType`
+/// #[derive(sqlx::Type)] // ERROR: `Vec<i64>` does not implement `ClickHouseHasArrayType`
 /// #[sqlx(transparent)]
 /// struct UserIds(Vec<i64>);
 /// ```
 ///
 /// To remedy this, add `#[sqlx(no_pg_array)]`, which disables the generation
-/// of the `PgHasArrayType` impl:
+/// of the `ClickHouseHasArrayType` impl:
 ///
 /// ```rust,ignore
 /// #[derive(sqlx::Type)]
@@ -48,114 +48,114 @@ use crate::{PgArgumentBuffer, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
 /// ```
 ///
 /// See [the documentation of `Type`][Type] for more details.
-pub trait PgHasArrayType {
-    fn array_type_info() -> PgTypeInfo;
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+pub trait ClickHouseHasArrayType {
+    fn array_type_info() -> ClickHouseTypeInfo;
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         *ty == Self::array_type_info()
     }
 }
 
-impl<T> PgHasArrayType for &T
+impl<T> ClickHouseHasArrayType for &T
 where
-    T: PgHasArrayType,
+    T: ClickHouseHasArrayType,
 {
-    fn array_type_info() -> PgTypeInfo {
+    fn array_type_info() -> ClickHouseTypeInfo {
         T::array_type_info()
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         T::array_compatible(ty)
     }
 }
 
-impl<T> PgHasArrayType for Option<T>
+impl<T> ClickHouseHasArrayType for Option<T>
 where
-    T: PgHasArrayType,
+    T: ClickHouseHasArrayType,
 {
-    fn array_type_info() -> PgTypeInfo {
+    fn array_type_info() -> ClickHouseTypeInfo {
         T::array_type_info()
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         T::array_compatible(ty)
     }
 }
 
-impl<T> PgHasArrayType for Text<T> {
-    fn array_type_info() -> PgTypeInfo {
+impl<T> ClickHouseHasArrayType for Text<T> {
+    fn array_type_info() -> ClickHouseTypeInfo {
         String::array_type_info()
     }
 
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
         String::array_compatible(ty)
     }
 }
 
-impl<T> Type<Postgres> for [T]
+impl<T> Type<ClickHouse> for [T]
 where
-    T: PgHasArrayType,
+    T: ClickHouseHasArrayType,
 {
-    fn type_info() -> PgTypeInfo {
+    fn type_info() -> ClickHouseTypeInfo {
         T::array_type_info()
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         T::array_compatible(ty)
     }
 }
 
-impl<T> Type<Postgres> for Vec<T>
+impl<T> Type<ClickHouse> for Vec<T>
 where
-    T: PgHasArrayType,
+    T: ClickHouseHasArrayType,
 {
-    fn type_info() -> PgTypeInfo {
+    fn type_info() -> ClickHouseTypeInfo {
         T::array_type_info()
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         T::array_compatible(ty)
     }
 }
 
-impl<T, const N: usize> Type<Postgres> for [T; N]
+impl<T, const N: usize> Type<ClickHouse> for [T; N]
 where
-    T: PgHasArrayType,
+    T: ClickHouseHasArrayType,
 {
-    fn type_info() -> PgTypeInfo {
+    fn type_info() -> ClickHouseTypeInfo {
         T::array_type_info()
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         T::array_compatible(ty)
     }
 }
 
-impl<'q, T> Encode<'q, Postgres> for Vec<T>
+impl<'q, T> Encode<'q, ClickHouse> for Vec<T>
 where
-    for<'a> &'a [T]: Encode<'q, Postgres>,
-    T: Encode<'q, Postgres>,
+    for<'a> &'a [T]: Encode<'q, ClickHouse>,
+    T: Encode<'q, ClickHouse>,
 {
     #[inline]
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.as_slice().encode_by_ref(buf)
     }
 }
 
-impl<'q, T, const N: usize> Encode<'q, Postgres> for [T; N]
+impl<'q, T, const N: usize> Encode<'q, ClickHouse> for [T; N]
 where
-    for<'a> &'a [T]: Encode<'q, Postgres>,
-    T: Encode<'q, Postgres>,
+    for<'a> &'a [T]: Encode<'q, ClickHouse>,
+    T: Encode<'q, ClickHouse>,
 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.as_slice().encode_by_ref(buf)
     }
 }
 
-impl<'q, T> Encode<'q, Postgres> for &'_ [T]
+impl<'q, T> Encode<'q, ClickHouse> for &'_ [T]
 where
-    T: Encode<'q, Postgres> + Type<Postgres>,
+    T: Encode<'q, ClickHouse> + Type<ClickHouse>,
 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         let type_info = self
             .first()
             .and_then(Encode::produces)
@@ -166,8 +166,8 @@ where
 
         // element type
         match type_info.0 {
-            PgType::DeclareWithName(name) => buf.patch_type_by_name(&name),
-            PgType::DeclareArrayOf(array) => buf.patch_array_type(array),
+            ClickHouseType::DeclareWithName(name) => buf.patch_type_by_name(&name),
+            ClickHouseType::DeclareArrayOf(array) => buf.patch_array_type(array),
 
             ty => {
                 buf.extend(&ty.oid().0.to_be_bytes());
@@ -176,7 +176,7 @@ where
 
         let array_len = i32::try_from(self.len()).map_err(|_| {
             format!(
-                "encoded array length is too large for Postgres: {}",
+                "encoded array length is too large for ClickHouse: {}",
                 self.len()
             )
         })?;
@@ -192,11 +192,11 @@ where
     }
 }
 
-impl<'r, T, const N: usize> Decode<'r, Postgres> for [T; N]
+impl<'r, T, const N: usize> Decode<'r, ClickHouse> for [T; N]
 where
-    T: for<'a> Decode<'a, Postgres> + Type<Postgres>,
+    T: for<'a> Decode<'a, ClickHouse> + Type<ClickHouse>,
 {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         // This could be done more efficiently by refactoring the Vec decoding below so that it can
         // be used for arrays and Vec.
         let vec: Vec<T> = Decode::decode(value)?;
@@ -205,15 +205,15 @@ where
     }
 }
 
-impl<'r, T> Decode<'r, Postgres> for Vec<T>
+impl<'r, T> Decode<'r, ClickHouse> for Vec<T>
 where
-    T: for<'a> Decode<'a, Postgres> + Type<Postgres>,
+    T: for<'a> Decode<'a, ClickHouse> + Type<ClickHouse>,
 {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         let format = value.format();
 
         match format {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 // https://github.com/postgres/postgres/blob/a995b371ae29de2d38c4b7881cf414b1560e9746/src/backend/utils/adt/arrayfuncs.c#L1548
 
                 let mut buf = value.as_bytes()?;
@@ -237,7 +237,7 @@ where
 
                 // the OID of the element
                 let element_type_oid = Oid(buf.get_u32());
-                let element_type_info: PgTypeInfo = PgTypeInfo::try_from_oid(element_type_oid)
+                let element_type_info: ClickHouseTypeInfo = ClickHouseTypeInfo::try_from_oid(element_type_oid)
                     .or_else(|| value.type_info.try_array_element().map(Cow::into_owned))
                     .ok_or_else(|| {
                         BoxDynError::from(format!(
@@ -262,7 +262,7 @@ where
                 let mut elements = Vec::with_capacity(len);
 
                 for _ in 0..len {
-                    let value_ref = PgValueRef::get(&mut buf, format, element_type_info.clone())?;
+                    let value_ref = ClickHouseValueRef::get(&mut buf, format, element_type_info.clone())?;
 
                     elements.push(T::decode(value_ref)?);
                 }
@@ -270,7 +270,7 @@ where
                 Ok(elements)
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 // no type is provided from the database for the element
                 let element_type_info = T::type_info();
 
@@ -339,7 +339,7 @@ where
                         Some(value.as_bytes())
                     };
 
-                    elements.push(T::decode(PgValueRef {
+                    elements.push(T::decode(ClickHouseValueRef {
                         value: value_opt,
                         row: None,
                         type_info: element_type_info.clone(),

@@ -10,27 +10,27 @@ use crate::{
     encode::{Encode, IsNull},
     error::BoxDynError,
     types::Type,
-    PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueRef, Postgres,
+    ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueRef, ClickHouse,
 };
 use serde::{Deserialize, Serialize};
 use sqlx_core::bytes::Buf;
 
-/// Key-value support (`hstore`) for Postgres.
+/// Key-value support (`hstore`) for ClickHouse.
 ///
 /// SQLx currently maps `hstore` to a `BTreeMap<String, Option<String>>` but this may be expanded in
 /// future to allow for user defined types.
 ///
-/// See [the Postgres manual, Appendix F, Section 18][PG.F.18]
+/// See [the ClickHouse manual, Appendix F, Section 18][PG.F.18]
 ///
 /// [PG.F.18]: https://www.postgresql.org/docs/current/hstore.html
 ///
-/// ### Note: Requires Postgres 8.3+
+/// ### Note: Requires ClickHouse 8.3+
 /// Introduced as a method for storing unstructured data, the `hstore` extension was first added in
-/// Postgres 8.3.
+/// ClickHouse 8.3.
 ///
 ///
 /// ### Note: Extension Required
-/// The `hstore` extension is not enabled by default in Postgres. You will need to do so explicitly:
+/// The `hstore` extension is not enabled by default in ClickHouse. You will need to do so explicitly:
 ///
 /// ```ignore
 /// CREATE EXTENSION IF NOT EXISTS hstore;
@@ -39,14 +39,14 @@ use sqlx_core::bytes::Buf;
 /// # Examples
 ///
 /// ```
-/// # use sqlx_postgres::types::PgHstore;
-/// // Shows basic usage of the PgHstore type.
+/// # use sqlx_postgres::types::ClickHouseHstore;
+/// // Shows basic usage of the ClickHouseHstore type.
 /// //
 /// #[derive(Clone, Debug, Default, Eq, PartialEq)]
 /// struct UserCreate<'a> {
 ///     username: &'a str,
 ///     password: &'a str,
-///     additional_data: PgHstore
+///     additional_data: ClickHouseHstore
 /// }
 ///
 /// let mut new_user = UserCreate {
@@ -70,10 +70,10 @@ use sqlx_core::bytes::Buf;
 /// ```
 ///
 /// ```
-/// # use sqlx_postgres::types::PgHstore;
-/// // PgHstore implements FromIterator to simplify construction.
+/// # use sqlx_postgres::types::ClickHouseHstore;
+/// // ClickHouseHstore implements FromIterator to simplify construction.
 /// //
-/// let additional_data = PgHstore::from_iter([
+/// let additional_data = ClickHouseHstore::from_iter([
 ///     ("department".to_string(), Some("IT".to_string())),
 ///     ("equipment_issued".to_string(), None),
 /// ]);
@@ -89,9 +89,9 @@ use sqlx_core::bytes::Buf;
 /// ```
 ///
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
-pub struct PgHstore(pub BTreeMap<String, Option<String>>);
+pub struct ClickHouseHstore(pub BTreeMap<String, Option<String>>);
 
-impl Deref for PgHstore {
+impl Deref for ClickHouseHstore {
     type Target = BTreeMap<String, Option<String>>;
 
     fn deref(&self) -> &Self::Target {
@@ -99,19 +99,19 @@ impl Deref for PgHstore {
     }
 }
 
-impl DerefMut for PgHstore {
+impl DerefMut for ClickHouseHstore {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl FromIterator<(String, String)> for PgHstore {
+impl FromIterator<(String, String)> for ClickHouseHstore {
     fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
         iter.into_iter().map(|(k, v)| (k, Some(v))).collect()
     }
 }
 
-impl FromIterator<(String, Option<String>)> for PgHstore {
+impl FromIterator<(String, Option<String>)> for ClickHouseHstore {
     fn from_iter<T: IntoIterator<Item = (String, Option<String>)>>(iter: T) -> Self {
         let mut result = Self::default();
 
@@ -123,7 +123,7 @@ impl FromIterator<(String, Option<String>)> for PgHstore {
     }
 }
 
-impl IntoIterator for PgHstore {
+impl IntoIterator for ClickHouseHstore {
     type Item = (String, Option<String>);
     type IntoIter = btree_map::IntoIter<String, Option<String>>;
 
@@ -132,35 +132,35 @@ impl IntoIterator for PgHstore {
     }
 }
 
-impl Type<Postgres> for PgHstore {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("hstore")
+impl Type<ClickHouse> for ClickHouseHstore {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("hstore")
     }
 }
 
-impl PgHasArrayType for PgHstore {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::array_of("hstore")
+impl ClickHouseHasArrayType for ClickHouseHstore {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::array_of("hstore")
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgHstore {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
-        let mut buf = <&[u8] as Decode<Postgres>>::decode(value)?;
+impl<'r> Decode<'r, ClickHouse> for ClickHouseHstore {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
+        let mut buf = <&[u8] as Decode<ClickHouse>>::decode(value)?;
         let len = read_length(&mut buf)?;
 
         let len =
-            usize::try_from(len).map_err(|_| format!("PgHstore: length out of range: {len}"))?;
+            usize::try_from(len).map_err(|_| format!("ClickHouseHstore: length out of range: {len}"))?;
 
         let mut result = Self::default();
 
         for i in 0..len {
             let key = read_string(&mut buf)
-                .map_err(|e| format!("PgHstore: error reading {i}th key: {e}"))?
-                .ok_or_else(|| format!("PgHstore: expected {i}th key, got nothing"))?;
+                .map_err(|e| format!("ClickHouseHstore: error reading {i}th key: {e}"))?
+                .ok_or_else(|| format!("ClickHouseHstore: expected {i}th key, got nothing"))?;
 
             let value = read_string(&mut buf)
-                .map_err(|e| format!("PgHstore: error reading value for key {key:?}: {e}"))?;
+                .map_err(|e| format!("ClickHouseHstore: error reading value for key {key:?}: {e}"))?;
 
             result.insert(key, value);
         }
@@ -173,13 +173,13 @@ impl<'r> Decode<'r, Postgres> for PgHstore {
     }
 }
 
-impl Encode<'_, Postgres> for PgHstore {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for ClickHouseHstore {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend_from_slice(&i32::to_be_bytes(
             self.0
                 .len()
                 .try_into()
-                .map_err(|_| format!("PgHstore length out of range: {}", self.0.len()))?,
+                .map_err(|_| format!("ClickHouseHstore length out of range: {}", self.0.len()))?,
         ));
 
         for (i, (key, val)) in self.0.iter().enumerate() {
@@ -188,7 +188,7 @@ impl Encode<'_, Postgres> for PgHstore {
             let key_len = i32::try_from(key_bytes.len()).map_err(|_| {
                 // Doesn't make sense to print the key itself: it's more than 2 GiB long!
                 format!(
-                    "PgHstore: length of {i}th key out of range: {} bytes",
+                    "ClickHouseHstore: length of {i}th key out of range: {} bytes",
                     key_bytes.len()
                 )
             })?;
@@ -202,7 +202,7 @@ impl Encode<'_, Postgres> for PgHstore {
 
                     let val_len = i32::try_from(val_bytes.len()).map_err(|_| {
                         format!(
-                            "PgHstore: value length for key {key:?} out of range: {} bytes",
+                            "ClickHouseHstore: value length for key {key:?} out of range: {} bytes",
                             val_bytes.len()
                         )
                     })?;
@@ -257,7 +257,7 @@ fn read_string(buf: &mut &[u8]) -> Result<Option<String>, String> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::PgValueFormat;
+    use crate::ClickHouseValueFormat;
 
     const EMPTY: &str = "00000000";
 
@@ -269,22 +269,22 @@ mod test {
         let empty = hex::decode(EMPTY).unwrap();
         let name_surname_age = hex::decode(NAME_SURNAME_AGE).unwrap();
 
-        let empty = PgValueRef {
+        let empty = ClickHouseValueRef {
             value: Some(empty.as_slice()),
             row: None,
-            type_info: PgTypeInfo::with_name("hstore"),
-            format: PgValueFormat::Binary,
+            type_info: ClickHouseTypeInfo::with_name("hstore"),
+            format: ClickHouseValueFormat::Binary,
         };
 
-        let name_surname = PgValueRef {
+        let name_surname = ClickHouseValueRef {
             value: Some(name_surname_age.as_slice()),
             row: None,
-            type_info: PgTypeInfo::with_name("hstore"),
-            format: PgValueFormat::Binary,
+            type_info: ClickHouseTypeInfo::with_name("hstore"),
+            format: ClickHouseValueFormat::Binary,
         };
 
-        let res_empty = PgHstore::decode(empty).unwrap();
-        let res_name_surname = PgHstore::decode(name_surname).unwrap();
+        let res_empty = ClickHouseHstore::decode(empty).unwrap();
+        let res_name_surname = ClickHouseHstore::decode(name_surname).unwrap();
 
         assert!(res_empty.is_empty());
         assert_eq!(res_name_surname["name"], Some("John".to_string()));
@@ -293,22 +293,22 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "PgHstore: length out of range: -5")]
+    #[should_panic(expected = "ClickHouseHstore: length out of range: -5")]
     fn hstore_deserialize_buffer_length_error() {
-        let buf = PgValueRef {
+        let buf = ClickHouseValueRef {
             value: Some(&[255, 255, 255, 251]),
             row: None,
-            type_info: PgTypeInfo::with_name("hstore"),
-            format: PgValueFormat::Binary,
+            type_info: ClickHouseTypeInfo::with_name("hstore"),
+            format: ClickHouseValueFormat::Binary,
         };
 
-        PgHstore::decode(buf).unwrap();
+        ClickHouseHstore::decode(buf).unwrap();
     }
 
     #[test]
     fn hstore_serialize_ok() {
-        let mut buff = PgArgumentBuffer::default();
-        let _ = PgHstore::from_iter::<[(String, String); 0]>([])
+        let mut buff = ClickHouseArgumentBuffer::default();
+        let _ = ClickHouseHstore::from_iter::<[(String, String); 0]>([])
             .encode_by_ref(&mut buff)
             .unwrap();
 
@@ -316,7 +316,7 @@ mod test {
 
         buff.clear();
 
-        let _ = PgHstore::from_iter([
+        let _ = ClickHouseHstore::from_iter([
             ("name".to_string(), Some("John".to_string())),
             ("surname".to_string(), Some("Doe".to_string())),
             ("age".to_string(), None),

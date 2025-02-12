@@ -6,17 +6,17 @@ use smallvec::alloc::borrow::Cow;
 use sqlx_core::bytes::Bytes;
 pub(crate) use sqlx_core::error::*;
 
-use crate::message::{BackendMessage, BackendMessageFormat, Notice, PgSeverity};
+use crate::message::{BackendMessage, BackendMessageFormat, Notice, ClickHouseSeverity};
 
-/// An error returned from the PostgreSQL database.
-pub struct PgDatabaseError(pub(crate) Notice);
+/// An error returned from the ClickHouse database.
+pub struct ClickHouseDatabaseError(pub(crate) Notice);
 
 // Error message fields are documented:
 // https://www.postgresql.org/docs/current/protocol-error-fields.html
 
-impl PgDatabaseError {
+impl ClickHouseDatabaseError {
     #[inline]
-    pub fn severity(&self) -> PgSeverity {
+    pub fn severity(&self) -> ClickHouseSeverity {
         self.0.severity()
     }
 
@@ -52,16 +52,16 @@ impl PgDatabaseError {
     /// Indicates an error cursor position as an index into the original query string; or,
     /// a position into an internally generated query.
     #[inline]
-    pub fn position(&self) -> Option<PgErrorPosition<'_>> {
+    pub fn position(&self) -> Option<ClickHouseErrorPosition<'_>> {
         self.0
             .get_raw(b'P')
             .and_then(atoi)
-            .map(PgErrorPosition::Original)
+            .map(ClickHouseErrorPosition::Original)
             .or_else(|| {
                 let position = self.0.get_raw(b'p').and_then(atoi)?;
                 let query = self.0.get(b'q')?;
 
-                Some(PgErrorPosition::Internal { position, query })
+                Some(ClickHouseErrorPosition::Internal { position, query })
             })
     }
 
@@ -117,7 +117,7 @@ impl PgDatabaseError {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum PgErrorPosition<'a> {
+pub enum ClickHouseErrorPosition<'a> {
     /// A position (in characters) into the original query.
     Original(usize),
 
@@ -132,9 +132,9 @@ pub enum PgErrorPosition<'a> {
     },
 }
 
-impl Debug for PgDatabaseError {
+impl Debug for ClickHouseDatabaseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PgDatabaseError")
+        f.debug_struct("ClickHouseDatabaseError")
             .field("severity", &self.severity())
             .field("code", &self.code())
             .field("message", &self.message())
@@ -154,15 +154,15 @@ impl Debug for PgDatabaseError {
     }
 }
 
-impl Display for PgDatabaseError {
+impl Display for ClickHouseDatabaseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.message())
     }
 }
 
-impl StdError for PgDatabaseError {}
+impl StdError for ClickHouseDatabaseError {}
 
-impl DatabaseError for PgDatabaseError {
+impl DatabaseError for ClickHouseDatabaseError {
     fn message(&self) -> &str {
         self.message()
     }
@@ -220,7 +220,7 @@ impl DatabaseError for PgDatabaseError {
 }
 
 // ErrorResponse is the same structure as NoticeResponse but a different format code.
-impl BackendMessage for PgDatabaseError {
+impl BackendMessage for ClickHouseDatabaseError {
     const FORMAT: BackendMessageFormat = BackendMessageFormat::ErrorResponse;
 
     #[inline(always)]

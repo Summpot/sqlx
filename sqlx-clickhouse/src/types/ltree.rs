@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::ops::Deref;
@@ -11,7 +11,7 @@ use std::str::FromStr;
 /// Represents ltree specific errors
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum PgLTreeParseError {
+pub enum ClickHouseLTreeParseError {
     /// LTree labels can only contain [A-Za-z0-9_]
     #[error("ltree label contains invalid characters")]
     InvalidLtreeLabel,
@@ -22,10 +22,10 @@ pub enum PgLTreeParseError {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PgLTreeLabel(String);
+pub struct ClickHouseLTreeLabel(String);
 
-impl PgLTreeLabel {
-    pub fn new<S>(label: S) -> Result<Self, PgLTreeParseError>
+impl ClickHouseLTreeLabel {
+    pub fn new<S>(label: S) -> Result<Self, ClickHouseLTreeParseError>
     where
         S: Into<String>,
     {
@@ -37,12 +37,12 @@ impl PgLTreeLabel {
         {
             Ok(Self(label))
         } else {
-            Err(PgLTreeParseError::InvalidLtreeLabel)
+            Err(ClickHouseLTreeParseError::InvalidLtreeLabel)
         }
     }
 }
 
-impl Deref for PgLTreeLabel {
+impl Deref for ClickHouseLTreeLabel {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -50,53 +50,53 @@ impl Deref for PgLTreeLabel {
     }
 }
 
-impl FromStr for PgLTreeLabel {
-    type Err = PgLTreeParseError;
+impl FromStr for ClickHouseLTreeLabel {
+    type Err = ClickHouseLTreeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        PgLTreeLabel::new(s)
+        ClickHouseLTreeLabel::new(s)
     }
 }
 
-impl Display for PgLTreeLabel {
+impl Display for ClickHouseLTreeLabel {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-/// Container for a Label Tree (`ltree`) in Postgres.
+/// Container for a Label Tree (`ltree`) in ClickHouse.
 ///
 /// See <https://www.postgresql.org/docs/current/ltree.html>
 ///
-/// ### Note: Requires Postgres 13+
+/// ### Note: Requires ClickHouse 13+
 ///
-/// This integration requires that the `ltree` type support the binary format in the Postgres
-/// wire protocol, which only became available in Postgres 13.
-/// ([Postgres 13.0 Release Notes, Additional Modules](https://www.postgresql.org/docs/13/release-13.html#id-1.11.6.11.5.14))
+/// This integration requires that the `ltree` type support the binary format in the ClickHouse
+/// wire protocol, which only became available in ClickHouse 13.
+/// ([ClickHouse 13.0 Release Notes, Additional Modules](https://www.postgresql.org/docs/13/release-13.html#id-1.11.6.11.5.14))
 ///
-/// Ideally, SQLx's Postgres driver should support falling back to text format for types
+/// Ideally, SQLx's ClickHouse driver should support falling back to text format for types
 /// which don't have `typsend` and `typrecv` entries in `pg_type`, but that work still needs
 /// to be done.
 ///
 /// ### Note: Extension Required
-/// The `ltree` extension is not enabled by default in Postgres. You will need to do so explicitly:
+/// The `ltree` extension is not enabled by default in ClickHouse. You will need to do so explicitly:
 ///
 /// ```ignore
 /// CREATE EXTENSION IF NOT EXISTS "ltree";
 /// ```
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PgLTree {
-    labels: Vec<PgLTreeLabel>,
+pub struct ClickHouseLTree {
+    labels: Vec<ClickHouseLTreeLabel>,
 }
 
-impl PgLTree {
+impl ClickHouseLTree {
     /// creates default/empty ltree
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// creates ltree from a [`Vec<PgLTreeLabel>`]
-    pub fn from(labels: Vec<PgLTreeLabel>) -> Self {
+    /// creates ltree from a [`Vec<ClickHouseLTreeLabel>`]
+    pub fn from(labels: Vec<ClickHouseLTreeLabel>) -> Self {
         Self { labels }
     }
 
@@ -104,50 +104,50 @@ impl PgLTree {
     // TODO: this should just be removed but I didn't want to bury it in a massive diff
     #[deprecated = "renamed to `try_from_iter()`"]
     #[allow(clippy::should_implement_trait)]
-    pub fn from_iter<I, S>(labels: I) -> Result<Self, PgLTreeParseError>
+    pub fn from_iter<I, S>(labels: I) -> Result<Self, ClickHouseLTreeParseError>
     where
         String: From<S>,
         I: IntoIterator<Item = S>,
     {
         let mut ltree = Self::default();
         for label in labels {
-            ltree.push(PgLTreeLabel::new(label)?);
+            ltree.push(ClickHouseLTreeLabel::new(label)?);
         }
         Ok(ltree)
     }
 
     /// Create an `LTREE` from an iterator of label strings.
     ///
-    /// Returns an error if any label fails to parse according to [`PgLTreeLabel::new()`].
-    pub fn try_from_iter<I, S>(labels: I) -> Result<Self, PgLTreeParseError>
+    /// Returns an error if any label fails to parse according to [`ClickHouseLTreeLabel::new()`].
+    pub fn try_from_iter<I, S>(labels: I) -> Result<Self, ClickHouseLTreeParseError>
     where
         S: Into<String>,
         I: IntoIterator<Item = S>,
     {
-        labels.into_iter().map(PgLTreeLabel::new).collect()
+        labels.into_iter().map(ClickHouseLTreeLabel::new).collect()
     }
 
     /// push a label to ltree
-    pub fn push(&mut self, label: PgLTreeLabel) {
+    pub fn push(&mut self, label: ClickHouseLTreeLabel) {
         self.labels.push(label);
     }
 
     /// pop a label from ltree
-    pub fn pop(&mut self) -> Option<PgLTreeLabel> {
+    pub fn pop(&mut self) -> Option<ClickHouseLTreeLabel> {
         self.labels.pop()
     }
 }
 
-impl FromIterator<PgLTreeLabel> for PgLTree {
-    fn from_iter<T: IntoIterator<Item = PgLTreeLabel>>(iter: T) -> Self {
+impl FromIterator<ClickHouseLTreeLabel> for ClickHouseLTree {
+    fn from_iter<T: IntoIterator<Item = ClickHouseLTreeLabel>>(iter: T) -> Self {
         Self {
             labels: iter.into_iter().collect(),
         }
     }
 }
 
-impl IntoIterator for PgLTree {
-    type Item = PgLTreeLabel;
+impl IntoIterator for ClickHouseLTree {
+    type Item = ClickHouseLTreeLabel;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -155,20 +155,20 @@ impl IntoIterator for PgLTree {
     }
 }
 
-impl FromStr for PgLTree {
-    type Err = PgLTreeParseError;
+impl FromStr for ClickHouseLTree {
+    type Err = ClickHouseLTreeParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
             labels: s
                 .split('.')
-                .map(PgLTreeLabel::new)
+                .map(ClickHouseLTreeLabel::new)
                 .collect::<Result<Vec<_>, Self::Err>>()?,
         })
     }
 }
 
-impl Display for PgLTree {
+impl Display for ClickHouseLTree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut iter = self.labels.iter();
         if let Some(label) = iter.next() {
@@ -181,29 +181,29 @@ impl Display for PgLTree {
     }
 }
 
-impl Deref for PgLTree {
-    type Target = [PgLTreeLabel];
+impl Deref for ClickHouseLTree {
+    type Target = [ClickHouseLTreeLabel];
 
     fn deref(&self) -> &Self::Target {
         &self.labels
     }
 }
 
-impl Type<Postgres> for PgLTree {
-    fn type_info() -> PgTypeInfo {
+impl Type<ClickHouse> for ClickHouseLTree {
+    fn type_info() -> ClickHouseTypeInfo {
         // Since `ltree` is enabled by an extension, it does not have a stable OID.
-        PgTypeInfo::with_name("ltree")
+        ClickHouseTypeInfo::with_name("ltree")
     }
 }
 
-impl PgHasArrayType for PgLTree {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_ltree")
+impl ClickHouseHasArrayType for ClickHouseLTree {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_ltree")
     }
 }
 
-impl Encode<'_, Postgres> for PgLTree {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for ClickHouseLTree {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(1i8.to_le_bytes());
         write!(buf, "{self}")?;
 
@@ -211,18 +211,18 @@ impl Encode<'_, Postgres> for PgLTree {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgLTree {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseLTree {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 let version = i8::from_le_bytes([bytes[0]; 1]);
                 if version != 1 {
-                    return Err(Box::new(PgLTreeParseError::InvalidLtreeVersion));
+                    return Err(Box::new(ClickHouseLTreeParseError::InvalidLtreeVersion));
                 }
                 Ok(Self::from_str(std::str::from_utf8(&bytes[1..])?)?)
             }
-            PgValueFormat::Text => Ok(Self::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Text => Ok(Self::from_str(value.as_str()?)?),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::error::{BoxDynError, UnexpectedNullError};
-use crate::{PgTypeInfo, Postgres};
+use crate::{ClickHouseTypeInfo, ClickHouse};
 use sqlx_core::bytes::{Buf, Bytes};
 pub(crate) use sqlx_core::value::{Value, ValueRef};
 use std::borrow::Cow;
@@ -7,33 +7,33 @@ use std::str::from_utf8;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[repr(u8)]
-pub enum PgValueFormat {
+pub enum ClickHouseValueFormat {
     Text = 0,
     Binary = 1,
 }
 
-/// Implementation of [`ValueRef`] for PostgreSQL.
+/// Implementation of [`ValueRef`] for ClickHouse.
 #[derive(Clone)]
-pub struct PgValueRef<'r> {
+pub struct ClickHouseValueRef<'r> {
     pub(crate) value: Option<&'r [u8]>,
     pub(crate) row: Option<&'r Bytes>,
-    pub(crate) type_info: PgTypeInfo,
-    pub(crate) format: PgValueFormat,
+    pub(crate) type_info: ClickHouseTypeInfo,
+    pub(crate) format: ClickHouseValueFormat,
 }
 
-/// Implementation of [`Value`] for PostgreSQL.
+/// Implementation of [`Value`] for ClickHouse.
 #[derive(Clone)]
-pub struct PgValue {
+pub struct ClickHouseValue {
     pub(crate) value: Option<Bytes>,
-    pub(crate) type_info: PgTypeInfo,
-    pub(crate) format: PgValueFormat,
+    pub(crate) type_info: ClickHouseTypeInfo,
+    pub(crate) format: ClickHouseValueFormat,
 }
 
-impl<'r> PgValueRef<'r> {
+impl<'r> ClickHouseValueRef<'r> {
     pub(crate) fn get(
         buf: &mut &'r [u8],
-        format: PgValueFormat,
-        ty: PgTypeInfo,
+        format: ClickHouseValueFormat,
+        ty: ClickHouseTypeInfo,
     ) -> Result<Self, String> {
         let element_len = buf.get_i32();
 
@@ -49,7 +49,7 @@ impl<'r> PgValueRef<'r> {
             Some(val)
         };
 
-        Ok(PgValueRef {
+        Ok(ClickHouseValueRef {
             value: element_val,
             row: None,
             type_info: ty,
@@ -57,7 +57,7 @@ impl<'r> PgValueRef<'r> {
         })
     }
 
-    pub fn format(&self) -> PgValueFormat {
+    pub fn format(&self) -> ClickHouseValueFormat {
         self.format
     }
 
@@ -73,12 +73,12 @@ impl<'r> PgValueRef<'r> {
     }
 }
 
-impl Value for PgValue {
-    type Database = Postgres;
+impl Value for ClickHouseValue {
+    type Database = ClickHouse;
 
     #[inline]
-    fn as_ref(&self) -> PgValueRef<'_> {
-        PgValueRef {
+    fn as_ref(&self) -> ClickHouseValueRef<'_> {
+        ClickHouseValueRef {
             value: self.value.as_deref(),
             row: None,
             type_info: self.type_info.clone(),
@@ -86,7 +86,7 @@ impl Value for PgValue {
         }
     }
 
-    fn type_info(&self) -> Cow<'_, PgTypeInfo> {
+    fn type_info(&self) -> Cow<'_, ClickHouseTypeInfo> {
         Cow::Borrowed(&self.type_info)
     }
 
@@ -95,10 +95,10 @@ impl Value for PgValue {
     }
 }
 
-impl<'r> ValueRef<'r> for PgValueRef<'r> {
-    type Database = Postgres;
+impl<'r> ValueRef<'r> for ClickHouseValueRef<'r> {
+    type Database = ClickHouse;
 
-    fn to_owned(&self) -> PgValue {
+    fn to_owned(&self) -> ClickHouseValue {
         let value = match (self.row, self.value) {
             (Some(row), Some(value)) => Some(row.slice_ref(value)),
 
@@ -107,14 +107,14 @@ impl<'r> ValueRef<'r> for PgValueRef<'r> {
             _ => None,
         };
 
-        PgValue {
+        ClickHouseValue {
             value,
             format: self.format,
             type_info: self.type_info.clone(),
         }
     }
 
-    fn type_info(&self) -> Cow<'_, PgTypeInfo> {
+    fn type_info(&self) -> Cow<'_, ClickHouseTypeInfo> {
         Cow::Borrowed(&self.type_info)
     }
 

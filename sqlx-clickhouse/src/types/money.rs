@@ -3,7 +3,7 @@ use crate::{
     encode::{Encode, IsNull},
     error::BoxDynError,
     types::Type,
-    {PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres},
+    {ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse},
 };
 use byteorder::{BigEndian, ByteOrder};
 use std::{
@@ -11,7 +11,7 @@ use std::{
     ops::{Add, AddAssign, Sub, SubAssign},
 };
 
-/// The PostgreSQL [`MONEY`] type stores a currency amount with a fixed fractional
+/// The ClickHouse [`MONEY`] type stores a currency amount with a fixed fractional
 /// precision. The fractional precision is determined by the database's
 /// `lc_monetary` setting.
 ///
@@ -23,7 +23,7 @@ use std::{
 /// ### `locale_frac_digits`
 /// This parameter corresponds to the number of digits after the decimal separator.
 ///
-/// This value must match what Postgres is expecting for the locale set in the database
+/// This value must match what ClickHouse is expecting for the locale set in the database
 /// or else the decimal value you see on the client side will not match the `money` value
 /// on the server side.
 ///
@@ -43,13 +43,13 @@ use std::{
 /// And the value you want is `N` in `frac_digits=N`. If you have shell access to the database
 /// server you should execute it there as available locales may differ between machines.
 ///
-/// Note that if `frac_digits` for the locale is outside the range `[0, 10]`, Postgres assumes
+/// Note that if `frac_digits` for the locale is outside the range `[0, 10]`, ClickHouse assumes
 /// it's a sentinel value and defaults to 2:
 /// <https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/cash.c#L114-L123>
 ///
 /// [`MONEY`]: https://www.postgresql.org/docs/current/datatype-money.html
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
-pub struct PgMoney(
+pub struct ClickHouseMoney(
     /// The raw integer value sent over the wire; for locales with `frac_digits=2` (i.e. most
     /// of them), this will be the value in whole cents.
     ///
@@ -63,7 +63,7 @@ pub struct PgMoney(
     pub i64,
 );
 
-impl PgMoney {
+impl ClickHouseMoney {
     /// Convert the money value into a [`BigDecimal`] using `locale_frac_digits`.
     ///
     /// See the type-level docs for an explanation of `locale_frac_digits`.
@@ -90,7 +90,7 @@ impl PgMoney {
     ///
     /// See the type-level docs for an explanation of `locale_frac_digits`.
     ///
-    /// Note that `Decimal` has 96 bits of precision, but `PgMoney` only has 63 plus the sign bit.
+    /// Note that `Decimal` has 96 bits of precision, but `ClickHouseMoney` only has 63 plus the sign bit.
     /// If the value is larger than 63 bits it will be truncated.
     ///
     /// [`Decimal`]: rust_decimal::Decimal
@@ -117,7 +117,7 @@ impl PgMoney {
     }
 
     /// Convert a [`BigDecimal`](bigdecimal::BigDecimal) value into money using the correct precision
-    /// defined in the PostgreSQL settings. The default precision is two.
+    /// defined in the ClickHouse settings. The default precision is two.
     #[cfg(feature = "bigdecimal")]
     pub fn from_bigdecimal(
         decimal: bigdecimal::BigDecimal,
@@ -143,19 +143,19 @@ impl PgMoney {
     }
 }
 
-impl Type<Postgres> for PgMoney {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::MONEY
+impl Type<ClickHouse> for ClickHouseMoney {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::MONEY
     }
 }
 
-impl PgHasArrayType for PgMoney {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::MONEY_ARRAY
+impl ClickHouseHasArrayType for ClickHouseMoney {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::MONEY_ARRAY
     }
 }
 
-impl<T> From<T> for PgMoney
+impl<T> From<T> for ClickHouseMoney
 where
     T: Into<i64>,
 {
@@ -164,23 +164,23 @@ where
     }
 }
 
-impl Encode<'_, Postgres> for PgMoney {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for ClickHouseMoney {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.0.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for PgMoney {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for ClickHouseMoney {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let cents = BigEndian::read_i64(value.as_bytes()?);
 
-                Ok(PgMoney(cents))
+                Ok(ClickHouseMoney(cents))
             }
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let error = io::Error::new(
                     io::ErrorKind::InvalidData,
                     "Reading a `MONEY` value in text format is not supported.",
@@ -192,27 +192,27 @@ impl Decode<'_, Postgres> for PgMoney {
     }
 }
 
-impl Add<PgMoney> for PgMoney {
-    type Output = PgMoney;
+impl Add<ClickHouseMoney> for ClickHouseMoney {
+    type Output = ClickHouseMoney;
 
     /// Adds two monetary values.
     ///
     /// # Panics
     /// Panics if overflowing the `i64::MAX`.
-    fn add(self, rhs: PgMoney) -> Self::Output {
+    fn add(self, rhs: ClickHouseMoney) -> Self::Output {
         self.0
             .checked_add(rhs.0)
-            .map(PgMoney)
+            .map(ClickHouseMoney)
             .expect("overflow adding money amounts")
     }
 }
 
-impl AddAssign<PgMoney> for PgMoney {
+impl AddAssign<ClickHouseMoney> for ClickHouseMoney {
     /// An assigning add for two monetary values.
     ///
     /// # Panics
     /// Panics if overflowing the `i64::MAX`.
-    fn add_assign(&mut self, rhs: PgMoney) {
+    fn add_assign(&mut self, rhs: ClickHouseMoney) {
         self.0 = self
             .0
             .checked_add(rhs.0)
@@ -220,27 +220,27 @@ impl AddAssign<PgMoney> for PgMoney {
     }
 }
 
-impl Sub<PgMoney> for PgMoney {
-    type Output = PgMoney;
+impl Sub<ClickHouseMoney> for ClickHouseMoney {
+    type Output = ClickHouseMoney;
 
     /// Subtracts two monetary values.
     ///
     /// # Panics
     /// Panics if underflowing the `i64::MIN`.
-    fn sub(self, rhs: PgMoney) -> Self::Output {
+    fn sub(self, rhs: ClickHouseMoney) -> Self::Output {
         self.0
             .checked_sub(rhs.0)
-            .map(PgMoney)
+            .map(ClickHouseMoney)
             .expect("overflow subtracting money amounts")
     }
 }
 
-impl SubAssign<PgMoney> for PgMoney {
+impl SubAssign<ClickHouseMoney> for ClickHouseMoney {
     /// An assigning subtract for two monetary values.
     ///
     /// # Panics
     /// Panics if underflowing the `i64::MIN`.
-    fn sub_assign(&mut self, rhs: PgMoney) {
+    fn sub_assign(&mut self, rhs: ClickHouseMoney) {
         self.0 = self
             .0
             .checked_sub(rhs.0)
@@ -250,71 +250,71 @@ impl SubAssign<PgMoney> for PgMoney {
 
 #[cfg(test)]
 mod tests {
-    use super::PgMoney;
+    use super::ClickHouseMoney;
 
     #[test]
     fn adding_works() {
-        assert_eq!(PgMoney(3), PgMoney(1) + PgMoney(2))
+        assert_eq!(ClickHouseMoney(3), ClickHouseMoney(1) + ClickHouseMoney(2))
     }
 
     #[test]
     fn add_assign_works() {
-        let mut money = PgMoney(1);
-        money += PgMoney(2);
+        let mut money = ClickHouseMoney(1);
+        money += ClickHouseMoney(2);
 
-        assert_eq!(PgMoney(3), money);
+        assert_eq!(ClickHouseMoney(3), money);
     }
 
     #[test]
     fn subtracting_works() {
-        assert_eq!(PgMoney(4), PgMoney(5) - PgMoney(1))
+        assert_eq!(ClickHouseMoney(4), ClickHouseMoney(5) - ClickHouseMoney(1))
     }
 
     #[test]
     fn sub_assign_works() {
-        let mut money = PgMoney(1);
-        money -= PgMoney(2);
+        let mut money = ClickHouseMoney(1);
+        money -= ClickHouseMoney(2);
 
-        assert_eq!(PgMoney(-1), money);
+        assert_eq!(ClickHouseMoney(-1), money);
     }
 
     #[test]
     fn default_value() {
-        let money = PgMoney::default();
+        let money = ClickHouseMoney::default();
 
-        assert_eq!(money, PgMoney(0));
+        assert_eq!(money, ClickHouseMoney(0));
     }
 
     #[test]
     #[should_panic]
     fn add_overflow_panics() {
-        let _ = PgMoney(i64::MAX) + PgMoney(1);
+        let _ = ClickHouseMoney(i64::MAX) + ClickHouseMoney(1);
     }
 
     #[test]
     #[should_panic]
     fn add_assign_overflow_panics() {
-        let mut money = PgMoney(i64::MAX);
-        money += PgMoney(1);
+        let mut money = ClickHouseMoney(i64::MAX);
+        money += ClickHouseMoney(1);
     }
 
     #[test]
     #[should_panic]
     fn sub_overflow_panics() {
-        let _ = PgMoney(i64::MIN) - PgMoney(1);
+        let _ = ClickHouseMoney(i64::MIN) - ClickHouseMoney(1);
     }
 
     #[test]
     #[should_panic]
     fn sub_assign_overflow_panics() {
-        let mut money = PgMoney(i64::MIN);
-        money -= PgMoney(1);
+        let mut money = ClickHouseMoney(i64::MIN);
+        money -= ClickHouseMoney(1);
     }
 
     #[test]
     #[cfg(feature = "bigdecimal")]
     fn conversion_to_bigdecimal_works() {
-        let money = PgMoney(12345);
+        let money = ClickHouseMoney(12345);
 
         assert_eq!(
             bigdecimal::BigDecimal::new(num_bigint::BigInt::from(12345), 2),
@@ -327,7 +327,7 @@ mod tests {
     fn conversion_to_decimal_works() {
         assert_eq!(
             rust_decimal::Decimal::new(12345, 2),
-            PgMoney(12345).to_decimal(2)
+            ClickHouseMoney(12345).to_decimal(2)
         );
     }
 
@@ -335,23 +335,23 @@ mod tests {
     #[cfg(feature = "rust_decimal")]
     fn conversion_from_decimal_works() {
         assert_eq!(
-            PgMoney(12345),
-            PgMoney::from_decimal(rust_decimal::Decimal::new(12345, 2), 2)
+            ClickHouseMoney(12345),
+            ClickHouseMoney::from_decimal(rust_decimal::Decimal::new(12345, 2), 2)
         );
 
         assert_eq!(
-            PgMoney(12345),
-            PgMoney::from_decimal(rust_decimal::Decimal::new(123450, 3), 2)
+            ClickHouseMoney(12345),
+            ClickHouseMoney::from_decimal(rust_decimal::Decimal::new(123450, 3), 2)
         );
 
         assert_eq!(
-            PgMoney(-12345),
-            PgMoney::from_decimal(rust_decimal::Decimal::new(-123450, 3), 2)
+            ClickHouseMoney(-12345),
+            ClickHouseMoney::from_decimal(rust_decimal::Decimal::new(-123450, 3), 2)
         );
 
         assert_eq!(
-            PgMoney(-12300),
-            PgMoney::from_decimal(rust_decimal::Decimal::new(-123, 0), 2)
+            ClickHouseMoney(-12300),
+            ClickHouseMoney::from_decimal(rust_decimal::Decimal::new(-123, 0), 2)
         );
     }
 
@@ -360,6 +360,6 @@ mod tests {
     fn conversion_from_bigdecimal_works() {
         let dec = bigdecimal::BigDecimal::new(num_bigint::BigInt::from(12345), 2);
 
-        assert_eq!(PgMoney(12345), PgMoney::from_bigdecimal(dec, 2).unwrap());
+        assert_eq!(ClickHouseMoney(12345), ClickHouseMoney::from_bigdecimal(dec, 2).unwrap());
     }
 }

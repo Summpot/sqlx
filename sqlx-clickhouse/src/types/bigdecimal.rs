@@ -5,55 +5,55 @@ use std::cmp;
 use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
-use crate::types::numeric::{PgNumeric, PgNumericSign};
+use crate::types::numeric::{ClickHouseNumeric, ClickHouseNumericSign};
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
-impl Type<Postgres> for BigDecimal {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::NUMERIC
+impl Type<ClickHouse> for BigDecimal {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUMERIC
     }
 }
 
-impl PgHasArrayType for BigDecimal {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::NUMERIC_ARRAY
+impl ClickHouseHasArrayType for BigDecimal {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUMERIC_ARRAY
     }
 }
 
-impl TryFrom<PgNumeric> for BigDecimal {
+impl TryFrom<ClickHouseNumeric> for BigDecimal {
     type Error = BoxDynError;
 
-    fn try_from(numeric: PgNumeric) -> Result<Self, BoxDynError> {
+    fn try_from(numeric: ClickHouseNumeric) -> Result<Self, BoxDynError> {
         Self::try_from(&numeric)
     }
 }
 
-impl TryFrom<&'_ PgNumeric> for BigDecimal {
+impl TryFrom<&'_ ClickHouseNumeric> for BigDecimal {
     type Error = BoxDynError;
 
-    fn try_from(numeric: &'_ PgNumeric) -> Result<Self, Self::Error> {
+    fn try_from(numeric: &'_ ClickHouseNumeric) -> Result<Self, Self::Error> {
         let (digits, sign, weight) = match *numeric {
-            PgNumeric::Number {
+            ClickHouseNumeric::Number {
                 ref digits,
                 sign,
                 weight,
                 ..
             } => (digits, sign, weight),
 
-            PgNumeric::NotANumber => {
+            ClickHouseNumeric::NotANumber => {
                 return Err("BigDecimal does not support NaN values".into());
             }
         };
 
         if digits.is_empty() {
-            // Postgres returns an empty digit array for 0 but BigInt expects at least one zero
+            // ClickHouse returns an empty digit array for 0 but BigInt expects at least one zero
             return Ok(0u64.into());
         }
 
         let sign = match sign {
-            PgNumericSign::Positive => Sign::Plus,
-            PgNumericSign::Negative => Sign::Minus,
+            ClickHouseNumericSign::Positive => Sign::Plus,
+            ClickHouseNumericSign::Negative => Sign::Minus,
         };
 
         // weight is 0 if the decimal point falls after the first base-10000 digit
@@ -71,9 +71,9 @@ impl TryFrom<&'_ PgNumeric> for BigDecimal {
             clippy::cast_sign_loss
         )]
         for (i, &digit) in digits.iter().enumerate() {
-            if !PgNumeric::is_valid_digit(digit) {
+            if !ClickHouseNumeric::is_valid_digit(digit) {
                 return Err(format!(
-                    "PgNumeric to BigDecimal: {i}th digit is out of range {digit}"
+                    "ClickHouseNumeric to BigDecimal: {i}th digit is out of range {digit}"
                 )
                 .into());
             }
@@ -83,13 +83,13 @@ impl TryFrom<&'_ PgNumeric> for BigDecimal {
         }
 
         let bigint = BigInt::from_radix_be(sign, &cents, 100)
-            .ok_or("PgNumeric contained an out-of-range digit")?;
+            .ok_or("ClickHouseNumeric contained an out-of-range digit")?;
 
         Ok(BigDecimal::new(bigint, scale))
     }
 }
 
-impl TryFrom<&'_ BigDecimal> for PgNumeric {
+impl TryFrom<&'_ BigDecimal> for ClickHouseNumeric {
     type Error = BoxDynError;
 
     fn try_from(decimal: &BigDecimal) -> Result<Self, BoxDynError> {
@@ -104,7 +104,7 @@ impl TryFrom<&'_ BigDecimal> for PgNumeric {
 
         let base_10_len = i64::try_from(base_10.len()).map_err(|_| {
             format!(
-                "BigDecimal base-10 length out of range for PgNumeric: {}",
+                "BigDecimal base-10 length out of range for ClickHouseNumeric: {}",
                 base_10.len()
             )
         })?;
@@ -171,7 +171,7 @@ impl TryFrom<&'_ BigDecimal> for PgNumeric {
             digits.pop();
         }
 
-        Ok(PgNumeric::Number {
+        Ok(ClickHouseNumeric::Number {
             sign: sign_to_pg(sign),
             scale,
             weight,
@@ -181,40 +181,40 @@ impl TryFrom<&'_ BigDecimal> for PgNumeric {
 }
 
 #[doc=include_str!("bigdecimal-range.md")]
-impl Encode<'_, Postgres> for BigDecimal {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
-        PgNumeric::try_from(self)?.encode(buf)?;
+impl Encode<'_, ClickHouse> for BigDecimal {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        ClickHouseNumeric::try_from(self)?.encode(buf)?;
 
         Ok(IsNull::No)
     }
 
     fn size_hint(&self) -> usize {
-        PgNumeric::size_hint(self.digits())
+        ClickHouseNumeric::size_hint(self.digits())
     }
 }
 
 /// ### Note: `NaN`
 /// `BigDecimal` has a greater range than `NUMERIC` (see the corresponding `Encode` impl for details)
 /// but cannot represent `NaN`, so decoding may return an error.
-impl Decode<'_, Postgres> for BigDecimal {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for BigDecimal {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         match value.format() {
-            PgValueFormat::Binary => PgNumeric::decode(value.as_bytes()?)?.try_into(),
-            PgValueFormat::Text => Ok(value.as_str()?.parse::<BigDecimal>()?),
+            ClickHouseValueFormat::Binary => ClickHouseNumeric::decode(value.as_bytes()?)?.try_into(),
+            ClickHouseValueFormat::Text => Ok(value.as_str()?.parse::<BigDecimal>()?),
         }
     }
 }
 
-fn sign_to_pg(sign: Sign) -> PgNumericSign {
+fn sign_to_pg(sign: Sign) -> ClickHouseNumericSign {
     match sign {
-        Sign::Plus | Sign::NoSign => PgNumericSign::Positive,
-        Sign::Minus => PgNumericSign::Negative,
+        Sign::Plus | Sign::NoSign => ClickHouseNumericSign::Positive,
+        Sign::Minus => ClickHouseNumericSign::Negative,
     }
 }
 
 #[cfg(test)]
 mod bigdecimal_to_pgnumeric {
-    use super::{BigDecimal, PgNumeric, PgNumericSign};
+    use super::{BigDecimal, ClickHouseNumeric, ClickHouseNumericSign};
     use std::convert::TryFrom;
 
     #[test]
@@ -222,9 +222,9 @@ mod bigdecimal_to_pgnumeric {
         let zero: BigDecimal = "0".parse().unwrap();
 
         assert_eq!(
-            PgNumeric::try_from(&zero).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&zero).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 0,
                 digits: vec![]
@@ -236,9 +236,9 @@ mod bigdecimal_to_pgnumeric {
     fn one() {
         let one: BigDecimal = "1".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&one).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&one).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 0,
                 digits: vec![1]
@@ -250,9 +250,9 @@ mod bigdecimal_to_pgnumeric {
     fn ten() {
         let ten: BigDecimal = "10".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&ten).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&ten).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 0,
                 digits: vec![10]
@@ -264,9 +264,9 @@ mod bigdecimal_to_pgnumeric {
     fn one_hundred() {
         let one_hundred: BigDecimal = "100".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&one_hundred).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&one_hundred).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 0,
                 digits: vec![100]
@@ -279,9 +279,9 @@ mod bigdecimal_to_pgnumeric {
         // BigDecimal doesn't normalize here
         let ten_thousand: BigDecimal = "10000".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&ten_thousand).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&ten_thousand).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 1,
                 digits: vec![1]
@@ -293,9 +293,9 @@ mod bigdecimal_to_pgnumeric {
     fn two_digits() {
         let two_digits: BigDecimal = "12345".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&two_digits).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&two_digits).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 1,
                 digits: vec![1, 2345]
@@ -307,9 +307,9 @@ mod bigdecimal_to_pgnumeric {
     fn one_tenth() {
         let one_tenth: BigDecimal = "0.1".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&one_tenth).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&one_tenth).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 1,
                 weight: -1,
                 digits: vec![1000]
@@ -321,9 +321,9 @@ mod bigdecimal_to_pgnumeric {
     fn one_hundredth() {
         let one_hundredth: BigDecimal = "0.01".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&one_hundredth).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&one_hundredth).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 2,
                 weight: -1,
                 digits: vec![100]
@@ -335,9 +335,9 @@ mod bigdecimal_to_pgnumeric {
     fn twelve_thousandths() {
         let twelve_thousandths: BigDecimal = "0.012".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&twelve_thousandths).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&twelve_thousandths).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 3,
                 weight: -1,
                 digits: vec![120]
@@ -349,9 +349,9 @@ mod bigdecimal_to_pgnumeric {
     fn decimal_1() {
         let decimal: BigDecimal = "1.2345".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&decimal).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&decimal).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 4,
                 weight: 0,
                 digits: vec![1, 2345]
@@ -363,9 +363,9 @@ mod bigdecimal_to_pgnumeric {
     fn decimal_2() {
         let decimal: BigDecimal = "0.12345".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&decimal).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&decimal).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 5,
                 weight: -1,
                 digits: vec![1234, 5000]
@@ -377,9 +377,9 @@ mod bigdecimal_to_pgnumeric {
     fn decimal_3() {
         let decimal: BigDecimal = "0.01234".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&decimal).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&decimal).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 5,
                 weight: -1,
                 digits: vec![0123, 4000]
@@ -391,9 +391,9 @@ mod bigdecimal_to_pgnumeric {
     fn decimal_4() {
         let decimal: BigDecimal = "12345.67890".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&decimal).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&decimal).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 5,
                 weight: 1,
                 digits: vec![1, 2345, 6789]
@@ -405,9 +405,9 @@ mod bigdecimal_to_pgnumeric {
     fn one_digit_decimal() {
         let one_digit_decimal: BigDecimal = "0.00001234".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&one_digit_decimal).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&one_digit_decimal).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 8,
                 weight: -2,
                 digits: vec![1234]
@@ -420,9 +420,9 @@ mod bigdecimal_to_pgnumeric {
         // This is a regression test for https://github.com/launchbadge/sqlx/issues/423
         let four_digit: BigDecimal = "1234".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&four_digit).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&four_digit).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 0,
                 digits: vec![1234]
@@ -435,9 +435,9 @@ mod bigdecimal_to_pgnumeric {
         // This is a regression test for https://github.com/launchbadge/sqlx/issues/423
         let negative_four_digit: BigDecimal = "-1234".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&negative_four_digit).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Negative,
+            ClickHouseNumeric::try_from(&negative_four_digit).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Negative,
                 scale: 0,
                 weight: 0,
                 digits: vec![1234]
@@ -450,9 +450,9 @@ mod bigdecimal_to_pgnumeric {
         // This is a regression test for https://github.com/launchbadge/sqlx/issues/423
         let eight_digit: BigDecimal = "12345678".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&eight_digit).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Positive,
+            ClickHouseNumeric::try_from(&eight_digit).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Positive,
                 scale: 0,
                 weight: 1,
                 digits: vec![1234, 5678]
@@ -465,9 +465,9 @@ mod bigdecimal_to_pgnumeric {
         // This is a regression test for https://github.com/launchbadge/sqlx/issues/423
         let negative_eight_digit: BigDecimal = "-12345678".parse().unwrap();
         assert_eq!(
-            PgNumeric::try_from(&negative_eight_digit).unwrap(),
-            PgNumeric::Number {
-                sign: PgNumericSign::Negative,
+            ClickHouseNumeric::try_from(&negative_eight_digit).unwrap(),
+            ClickHouseNumeric::Number {
+                sign: ClickHouseNumericSign::Negative,
                 scale: 0,
                 weight: 1,
                 digits: vec![1234, 5678]

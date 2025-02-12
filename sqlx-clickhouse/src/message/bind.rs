@@ -1,6 +1,6 @@
-use crate::io::{PgBufMutExt, PortalId, StatementId};
+use crate::io::{ClickHouseBufMutExt, PortalId, StatementId};
 use crate::message::{FrontendMessage, FrontendMessageFormat};
-use crate::PgValueFormat;
+use crate::ClickHouseValueFormat;
 use std::num::Saturating;
 
 /// <https://www.postgresql.org/docs/current/protocol-message-formats.html#PROTOCOL-MESSAGE-FORMATS-BIND>
@@ -22,7 +22,7 @@ pub struct Bind<'a> {
     /// There can be zero to indicate that there are no parameters or that the parameters all use the
     /// default format (text); or one, in which case the specified format code is applied to all
     /// parameters; or it can equal the actual number of parameters.
-    pub formats: &'a [PgValueFormat],
+    pub formats: &'a [ClickHouseValueFormat],
 
     // Note: interpreted as unsigned, as is `formats.len()` and `result_formats.len()`
     /// The number of parameters.
@@ -39,7 +39,7 @@ pub struct Bind<'a> {
     /// result columns should all use the default format (text); or one, in which
     /// case the specified format code is applied to all result columns (if any);
     /// or it can equal the actual number of result columns of the query.
-    pub result_formats: &'a [PgValueFormat],
+    pub result_formats: &'a [ClickHouseValueFormat],
 }
 
 impl FrontendMessage for Bind<'_> {

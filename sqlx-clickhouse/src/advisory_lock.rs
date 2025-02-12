@@ -1,14 +1,14 @@
 use crate::error::Result;
 use crate::Either;
-use crate::PgConnection;
+use crate::ClickHouseConnection;
 use hkdf::Hkdf;
 use once_cell::sync::OnceCell;
 use sha2::Sha256;
 use std::ops::{Deref, DerefMut};
 
-/// A mutex-like type utilizing [Postgres advisory locks].
+/// A mutex-like type utilizing [ClickHouse advisory locks].
 ///
-/// Advisory locks are a mechanism provided by Postgres to have mutually exclusive or shared
+/// Advisory locks are a mechanism provided by ClickHouse to have mutually exclusive or shared
 /// locks tracked in the database with application-defined semantics, as opposed to the standard
 /// row-level or table-level locks which may not fit all use-cases.
 ///
@@ -32,63 +32,63 @@ use std::ops::{Deref, DerefMut};
 /// and write locks, respectively. Multiple shared locks are allowed for the same key, but a single
 /// exclusive lock prevents any other lock being taken for a given key until it is released.
 ///
-/// [Postgres advisory locks]: https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
+/// [ClickHouse advisory locks]: https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
 #[derive(Debug, Clone)]
-pub struct PgAdvisoryLock {
-    key: PgAdvisoryLockKey,
+pub struct ClickHouseAdvisoryLock {
+    key: ClickHouseAdvisoryLockKey,
     /// The query to execute to release this lock.
     release_query: OnceCell<String>,
 }
 
-/// A key type natively used by Postgres advisory locks.
+/// A key type natively used by ClickHouse advisory locks.
 ///
-/// Currently, Postgres advisory locks have two different key spaces: one keyed by a single
-/// 64-bit integer, and one keyed by a pair of two 32-bit integers. The Postgres docs
+/// Currently, ClickHouse advisory locks have two different key spaces: one keyed by a single
+/// 64-bit integer, and one keyed by a pair of two 32-bit integers. The ClickHouse docs
 /// specify that these key spaces "do not overlap":
 ///
 /// <https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS>
 ///
 /// The documentation for the `pg_locks` system view explains further how advisory locks
-/// are treated in Postgres:
+/// are treated in ClickHouse:
 ///
 /// <https://www.postgresql.org/docs/current/view-pg-locks.html>
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum PgAdvisoryLockKey {
+pub enum ClickHouseAdvisoryLockKey {
     /// The keyspace designated by a single 64-bit integer.
     ///
-    /// When [PgAdvisoryLock] is constructed with [::new()][PgAdvisoryLock::new()],
+    /// When [ClickHouseAdvisoryLock] is constructed with [::new()][ClickHouseAdvisoryLock::new()],
     /// this is the keyspace used.
     BigInt(i64),
     /// The keyspace designated by two 32-bit integers.
     IntPair(i32, i32),
 }
 
-/// A wrapper for `PgConnection` (or a similar type) that represents a held Postgres advisory lock.
+/// A wrapper for `ClickHouseConnection` (or a similar type) that represents a held ClickHouse advisory lock.
 ///
-/// Can be acquired by [`PgAdvisoryLock::acquire()`] or [`PgAdvisoryLock::try_acquire()`].
+/// Can be acquired by [`ClickHouseAdvisoryLock::acquire()`] or [`ClickHouseAdvisoryLock::try_acquire()`].
 /// Released on-drop or via [`Self::release_now()`].
 ///
 /// ### Note: Release-on-drop is not immediate!
 /// On drop, this guard queues a `pg_advisory_unlock()` call on the connection which will be
 /// flushed to the server the next time it is used, or when it is returned to
-/// a [`PgPool`][crate::PgPool] in the case of
-/// [`PoolConnection<Postgres>`][crate::pool::PoolConnection].
+/// a [`ClickHousePool`][crate::ClickHousePool] in the case of
+/// [`PoolConnection<ClickHouse>`][crate::pool::PoolConnection].
 ///
 /// This means the lock is not actually released as soon as the guard is dropped. To ensure the
 /// lock is eagerly released, you can call [`.release_now().await`][Self::release_now()].
-pub struct PgAdvisoryLockGuard<'lock, C: AsMut<PgConnection>> {
-    lock: &'lock PgAdvisoryLock,
+pub struct ClickHouseAdvisoryLockGuard<'lock, C: AsMut<ClickHouseConnection>> {
+    lock: &'lock ClickHouseAdvisoryLock,
     conn: Option<C>,
 }
 
-impl PgAdvisoryLock {
-    /// Construct a `PgAdvisoryLock` using the given string as a key.
+impl ClickHouseAdvisoryLock {
+    /// Construct a `ClickHouseAdvisoryLock` using the given string as a key.
     ///
     /// This is intended to make it easier to use an advisory lock by using a human-readable string
     /// for a key as opposed to manually generating a unique integer key. The generated integer key
     /// is guaranteed to be stable and in the single 64-bit integer keyspace
-    /// (see [`PgAdvisoryLockKey`] for details).
+    /// (see [`ClickHouseAdvisoryLockKey`] for details).
     ///
     /// This is done by applying the [Hash-based Key Derivation Function (HKDF; IETF RFC 5869)][hkdf]
     /// to the bytes of the input string, but in a way that the calculated integer is unlikely
@@ -98,12 +98,12 @@ impl PgAdvisoryLock {
     /// [hkdf]: https://datatracker.ietf.org/doc/html/rfc5869
     /// ### Example
     /// ```rust
-    /// use sqlx::postgres::{PgAdvisoryLock, PgAdvisoryLockKey};
+    /// use sqlx::postgres::{ClickHouseAdvisoryLock, ClickHouseAdvisoryLockKey};
     ///
-    /// let lock = PgAdvisoryLock::new("my first Postgres advisory lock!");
-    /// // Negative values are fine because of how Postgres treats advisory lock keys.
+    /// let lock = ClickHouseAdvisoryLock::new("my first ClickHouse advisory lock!");
+    /// // Negative values are fine because of how ClickHouse treats advisory lock keys.
     /// // See the documentation for the `pg_locks` system view for details.
-    /// assert_eq!(lock.key(), &PgAdvisoryLockKey::BigInt(-5560419505042474287));
+    /// assert_eq!(lock.key(), &ClickHouseAdvisoryLockKey::BigInt(-5560419505042474287));
     /// ```
     pub fn new(key_string: impl AsRef<str>) -> Self {
         let input_key_material = key_string.as_ref();
@@ -116,7 +116,7 @@ impl PgAdvisoryLock {
         // but we're not trying to produce an unguessable value by any means; just one that's as
         // unlikely to already be in use as possible, but still deterministic.
         //
-        // SHA-256 was chosen as the hash function because it's already used in the Postgres driver,
+        // SHA-256 was chosen as the hash function because it's already used in the ClickHouse driver,
         // which should save on codegen and optimization.
 
         // We don't supply a salt as that is intended to be random, but we want a deterministic key.
@@ -131,7 +131,7 @@ impl PgAdvisoryLock {
         //
         // Do *not* change this string as it will affect the output!
         hkdf.expand(
-            b"SQLx (Rust) Postgres advisory lock",
+            b"SQLx (Rust) ClickHouse advisory lock",
             &mut output_key_material,
         )
         // `Hkdf::expand()` only returns an error if you ask for more than 255 times the digest size.
@@ -148,7 +148,7 @@ impl PgAdvisoryLock {
         //
         // The choice of `from_le_bytes()` is mostly due to x86 being the most popular
         // architecture for server software, so it should be a no-op there.
-        let key = PgAdvisoryLockKey::BigInt(i64::from_le_bytes(output_key_material));
+        let key = ClickHouseAdvisoryLockKey::BigInt(i64::from_le_bytes(output_key_material));
 
         tracing::trace!(
             ?key,
@@ -159,8 +159,8 @@ impl PgAdvisoryLock {
         Self::with_key(key)
     }
 
-    /// Construct a `PgAdvisoryLock` with a manually supplied key.
-    pub fn with_key(key: PgAdvisoryLockKey) -> Self {
+    /// Construct a `ClickHouseAdvisoryLock` with a manually supplied key.
+    pub fn with_key(key: ClickHouseAdvisoryLockKey) -> Self {
         Self {
             key,
             release_query: OnceCell::new(),
@@ -168,7 +168,7 @@ impl PgAdvisoryLock {
     }
 
     /// Returns the current key.
-    pub fn key(&self) -> &PgAdvisoryLockKey {
+    pub fn key(&self) -> &ClickHouseAdvisoryLockKey {
         &self.key
     }
 
@@ -183,33 +183,33 @@ impl PgAdvisoryLock {
     ///
     /// For a version that returns immediately instead of waiting, see [`Self::try_acquire()`].
     ///
-    /// A connection-like type is required to execute the call. Allowed types include `PgConnection`,
-    /// `PoolConnection<Postgres>` and `Transaction<Postgres>`, as well as mutable references to
+    /// A connection-like type is required to execute the call. Allowed types include `ClickHouseConnection`,
+    /// `PoolConnection<ClickHouse>` and `Transaction<ClickHouse>`, as well as mutable references to
     /// any of these.
     ///
     /// The returned guard queues a `pg_advisory_unlock()` call on the connection when dropped,
     /// which will be executed the next time the connection is used, or when returned to a
-    /// [`PgPool`][crate::PgPool] in the case of `PoolConnection<Postgres>`.
+    /// [`ClickHousePool`][crate::ClickHousePool] in the case of `PoolConnection<ClickHouse>`.
     ///
-    /// Postgres allows a single connection to acquire a given lock more than once without releasing
+    /// ClickHouse allows a single connection to acquire a given lock more than once without releasing
     /// it first, so in that sense the lock is re-entrant. However, the number of unlock operations
     /// must match the number of lock operations for the lock to actually be released.
     ///
-    /// See [Postgres' documentation for the Advisory Lock Functions][advisory-funcs] for details.
+    /// See [ClickHouse' documentation for the Advisory Lock Functions][advisory-funcs] for details.
     ///
     /// [advisory-funcs]: https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
-    pub async fn acquire<C: AsMut<PgConnection>>(
+    pub async fn acquire<C: AsMut<ClickHouseConnection>>(
         &self,
         mut conn: C,
-    ) -> Result<PgAdvisoryLockGuard<'_, C>> {
+    ) -> Result<ClickHouseAdvisoryLockGuard<'_, C>> {
         match &self.key {
-            PgAdvisoryLockKey::BigInt(key) => {
+            ClickHouseAdvisoryLockKey::BigInt(key) => {
                 crate::query::query("SELECT pg_advisory_lock($1)")
                     .bind(key)
                     .execute(conn.as_mut())
                     .await?;
             }
-            PgAdvisoryLockKey::IntPair(key1, key2) => {
+            ClickHouseAdvisoryLockKey::IntPair(key1, key2) => {
                 crate::query::query("SELECT pg_advisory_lock($1, $2)")
                     .bind(key1)
                     .bind(key2)
@@ -218,7 +218,7 @@ impl PgAdvisoryLock {
             }
         }
 
-        Ok(PgAdvisoryLockGuard::new(self, conn))
+        Ok(ClickHouseAdvisoryLockGuard::new(self, conn))
     }
 
     /// Acquires an exclusive lock using `pg_try_advisory_lock()`, returning immediately
@@ -226,33 +226,33 @@ impl PgAdvisoryLock {
     ///
     /// For a version that waits until the lock is acquired, see [`Self::acquire()`].
     ///
-    /// A connection-like type is required to execute the call. Allowed types include `PgConnection`,
-    /// `PoolConnection<Postgres>` and `Transaction<Postgres>`, as well as mutable references to
+    /// A connection-like type is required to execute the call. Allowed types include `ClickHouseConnection`,
+    /// `PoolConnection<ClickHouse>` and `Transaction<ClickHouse>`, as well as mutable references to
     /// any of these. The connection is returned if the lock could not be acquired.
     ///
     /// The returned guard queues a `pg_advisory_unlock()` call on the connection when dropped,
     /// which will be executed the next time the connection is used, or when returned to a
-    /// [`PgPool`][crate::PgPool] in the case of `PoolConnection<Postgres>`.
+    /// [`ClickHousePool`][crate::ClickHousePool] in the case of `PoolConnection<ClickHouse>`.
     ///
-    /// Postgres allows a single connection to acquire a given lock more than once without releasing
+    /// ClickHouse allows a single connection to acquire a given lock more than once without releasing
     /// it first, so in that sense the lock is re-entrant. However, the number of unlock operations
     /// must match the number of lock operations for the lock to actually be released.
     ///
-    /// See [Postgres' documentation for the Advisory Lock Functions][advisory-funcs] for details.
+    /// See [ClickHouse' documentation for the Advisory Lock Functions][advisory-funcs] for details.
     ///
     /// [advisory-funcs]: https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
-    pub async fn try_acquire<C: AsMut<PgConnection>>(
+    pub async fn try_acquire<C: AsMut<ClickHouseConnection>>(
         &self,
         mut conn: C,
-    ) -> Result<Either<PgAdvisoryLockGuard<'_, C>, C>> {
+    ) -> Result<Either<ClickHouseAdvisoryLockGuard<'_, C>, C>> {
         let locked: bool = match &self.key {
-            PgAdvisoryLockKey::BigInt(key) => {
+            ClickHouseAdvisoryLockKey::BigInt(key) => {
                 crate::query_scalar::query_scalar("SELECT pg_try_advisory_lock($1)")
                     .bind(key)
                     .fetch_one(conn.as_mut())
                     .await?
             }
-            PgAdvisoryLockKey::IntPair(key1, key2) => {
+            ClickHouseAdvisoryLockKey::IntPair(key1, key2) => {
                 crate::query_scalar::query_scalar("SELECT pg_try_advisory_lock($1, $2)")
                     .bind(key1)
                     .bind(key2)
@@ -262,7 +262,7 @@ impl PgAdvisoryLock {
         };
 
         if locked {
-            Ok(Either::Left(PgAdvisoryLockGuard::new(self, conn)))
+            Ok(Either::Left(ClickHouseAdvisoryLockGuard::new(self, conn)))
         } else {
             Ok(Either::Right(conn))
         }
@@ -270,24 +270,24 @@ impl PgAdvisoryLock {
 
     /// Execute `pg_advisory_unlock()` for this lock's key on the given connection.
     ///
-    /// This is used by [`PgAdvisoryLockGuard::release_now()`] and is also provided for manually
-    /// releasing the lock from connections returned by [`PgAdvisoryLockGuard::leak()`].
+    /// This is used by [`ClickHouseAdvisoryLockGuard::release_now()`] and is also provided for manually
+    /// releasing the lock from connections returned by [`ClickHouseAdvisoryLockGuard::leak()`].
     ///
     /// An error should only be returned if there is something wrong with the connection,
     /// in which case the lock will be automatically released by the connection closing anyway.
     ///
     /// The `boolean` value is that returned by `pg_advisory_lock()`. If it is `false`, it
     /// indicates that the lock was not actually held by the given connection and that a warning
-    /// has been logged by the Postgres server.
-    pub async fn force_release<C: AsMut<PgConnection>>(&self, mut conn: C) -> Result<(C, bool)> {
+    /// has been logged by the ClickHouse server.
+    pub async fn force_release<C: AsMut<ClickHouseConnection>>(&self, mut conn: C) -> Result<(C, bool)> {
         let released: bool = match &self.key {
-            PgAdvisoryLockKey::BigInt(key) => {
+            ClickHouseAdvisoryLockKey::BigInt(key) => {
                 crate::query_scalar::query_scalar("SELECT pg_advisory_unlock($1)")
                     .bind(key)
                     .fetch_one(conn.as_mut())
                     .await?
             }
-            PgAdvisoryLockKey::IntPair(key1, key2) => {
+            ClickHouseAdvisoryLockKey::IntPair(key1, key2) => {
                 crate::query_scalar::query_scalar("SELECT pg_advisory_unlock($1, $2)")
                     .bind(key1)
                     .bind(key2)
@@ -301,15 +301,15 @@ impl PgAdvisoryLock {
 
     fn get_release_query(&self) -> &str {
         self.release_query.get_or_init(|| match &self.key {
-            PgAdvisoryLockKey::BigInt(key) => format!("SELECT pg_advisory_unlock({key})"),
-            PgAdvisoryLockKey::IntPair(key1, key2) => {
+            ClickHouseAdvisoryLockKey::BigInt(key) => format!("SELECT pg_advisory_unlock({key})"),
+            ClickHouseAdvisoryLockKey::IntPair(key1, key2) => {
                 format!("SELECT pg_advisory_unlock({key1}, {key2})")
             }
         })
     }
 }
 
-impl PgAdvisoryLockKey {
+impl ClickHouseAdvisoryLockKey {
     /// Converts `Self::Bigint(bigint)` to `Some(bigint)` and all else to `None`.
     pub fn as_bigint(&self) -> Option<i64> {
         if let Self::BigInt(bigint) = self {
@@ -320,11 +320,11 @@ impl PgAdvisoryLockKey {
     }
 }
 
-const NONE_ERR: &str = "BUG: PgAdvisoryLockGuard.conn taken";
+const NONE_ERR: &str = "BUG: ClickHouseAdvisoryLockGuard.conn taken";
 
-impl<'lock, C: AsMut<PgConnection>> PgAdvisoryLockGuard<'lock, C> {
-    fn new(lock: &'lock PgAdvisoryLock, conn: C) -> Self {
-        PgAdvisoryLockGuard {
+impl<'lock, C: AsMut<ClickHouseConnection>> ClickHouseAdvisoryLockGuard<'lock, C> {
+    fn new(lock: &'lock ClickHouseAdvisoryLock, conn: C) -> Self {
+        ClickHouseAdvisoryLockGuard {
             lock,
             conn: Some(conn),
         }
@@ -336,7 +336,7 @@ impl<'lock, C: AsMut<PgConnection>> PgAdvisoryLockGuard<'lock, C> {
     /// in which case the lock will be automatically released by the connection closing anyway.
     ///
     /// If `pg_advisory_unlock()` returns `false`, a warning will be logged, both by SQLx as
-    /// well as the Postgres server. This would only happen if the lock was released without
+    /// well as the ClickHouse server. This would only happen if the lock was released without
     /// using this guard, or the connection was swapped using [`std::mem::replace()`].
     pub async fn release_now(mut self) -> Result<C> {
         let (conn, released) = self
@@ -347,7 +347,7 @@ impl<'lock, C: AsMut<PgConnection>> PgAdvisoryLockGuard<'lock, C> {
         if !released {
             tracing::warn!(
                 lock = ?self.lock.key,
-                "PgAdvisoryLockGuard: advisory lock was not held by the contained connection",
+                "ClickHouseAdvisoryLockGuard: advisory lock was not held by the contained connection",
             );
         }
 
@@ -356,14 +356,14 @@ impl<'lock, C: AsMut<PgConnection>> PgAdvisoryLockGuard<'lock, C> {
 
     /// Cancel the release of the advisory lock, keeping it held until the connection is closed.
     ///
-    /// To manually release the lock later, see [`PgAdvisoryLock::force_release()`].
+    /// To manually release the lock later, see [`ClickHouseAdvisoryLock::force_release()`].
     pub fn leak(mut self) -> C {
         self.conn.take().expect(NONE_ERR)
     }
 }
 
-impl<'lock, C: AsMut<PgConnection> + AsRef<PgConnection>> Deref for PgAdvisoryLockGuard<'lock, C> {
-    type Target = PgConnection;
+impl<'lock, C: AsMut<ClickHouseConnection> + AsRef<ClickHouseConnection>> Deref for ClickHouseAdvisoryLockGuard<'lock, C> {
+    type Target = ClickHouseConnection;
 
     fn deref(&self) -> &Self::Target {
         self.conn.as_ref().expect(NONE_ERR).as_ref()
@@ -374,20 +374,20 @@ impl<'lock, C: AsMut<PgConnection> + AsRef<PgConnection>> Deref for PgAdvisoryLo
 /// even allowing locks to be taken recursively.
 ///
 /// However, replacing the connection with a different one using, e.g. [`std::mem::replace()`]
-/// is a logic error and will cause a warning to be logged by the PostgreSQL server when this
+/// is a logic error and will cause a warning to be logged by the ClickHouse server when this
 /// guard attempts to release the lock.
-impl<'lock, C: AsMut<PgConnection> + AsRef<PgConnection>> DerefMut
-    for PgAdvisoryLockGuard<'lock, C>
+impl<'lock, C: AsMut<ClickHouseConnection> + AsRef<ClickHouseConnection>> DerefMut
+    for ClickHouseAdvisoryLockGuard<'lock, C>
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.conn.as_mut().expect(NONE_ERR).as_mut()
     }
 }
 
-impl<'lock, C: AsMut<PgConnection> + AsRef<PgConnection>> AsRef<PgConnection>
-    for PgAdvisoryLockGuard<'lock, C>
+impl<'lock, C: AsMut<ClickHouseConnection> + AsRef<ClickHouseConnection>> AsRef<ClickHouseConnection>
+    for ClickHouseAdvisoryLockGuard<'lock, C>
 {
-    fn as_ref(&self) -> &PgConnection {
+    fn as_ref(&self) -> &ClickHouseConnection {
         self.conn.as_ref().expect(NONE_ERR).as_ref()
     }
 }
@@ -396,18 +396,18 @@ impl<'lock, C: AsMut<PgConnection> + AsRef<PgConnection>> AsRef<PgConnection>
 /// even allowing locks to be taken recursively.
 ///
 /// However, replacing the connection with a different one using, e.g. [`std::mem::replace()`]
-/// is a logic error and will cause a warning to be logged by the PostgreSQL server when this
+/// is a logic error and will cause a warning to be logged by the ClickHouse server when this
 /// guard attempts to release the lock.
-impl<'lock, C: AsMut<PgConnection>> AsMut<PgConnection> for PgAdvisoryLockGuard<'lock, C> {
-    fn as_mut(&mut self) -> &mut PgConnection {
+impl<'lock, C: AsMut<ClickHouseConnection>> AsMut<ClickHouseConnection> for ClickHouseAdvisoryLockGuard<'lock, C> {
+    fn as_mut(&mut self) -> &mut ClickHouseConnection {
         self.conn.as_mut().expect(NONE_ERR).as_mut()
     }
 }
 
 /// Queues a `pg_advisory_unlock()` call on the wrapped connection which will be flushed
-/// to the server the next time it is used, or when it is returned to [`PgPool`][crate::PgPool]
-/// in the case of [`PoolConnection<Postgres>`][crate::pool::PoolConnection].
-impl<'lock, C: AsMut<PgConnection>> Drop for PgAdvisoryLockGuard<'lock, C> {
+/// to the server the next time it is used, or when it is returned to [`ClickHousePool`][crate::ClickHousePool]
+/// in the case of [`PoolConnection<ClickHouse>`][crate::pool::PoolConnection].
+impl<'lock, C: AsMut<ClickHouseConnection>> Drop for ClickHouseAdvisoryLockGuard<'lock, C> {
     fn drop(&mut self) {
         if let Some(mut conn) = self.conn.take() {
             // Queue a simple query message to execute next time the connection is used.
@@ -415,7 +415,7 @@ impl<'lock, C: AsMut<PgConnection>> Drop for PgAdvisoryLockGuard<'lock, C> {
             // but this is the safest way to queue a query to execute on the next opportunity.
             conn.as_mut()
                 .queue_simple_query(self.lock.get_release_query())
-                .expect("BUG: PgAdvisoryLock::get_release_query() somehow too long for protocol");
+                .expect("BUG: ClickHouseAdvisoryLock::get_release_query() somehow too long for protocol");
         }
     }
 }

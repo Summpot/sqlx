@@ -131,7 +131,7 @@ impl BackendMessage for CopyDone {
         if !bytes.is_empty() {
             // Not fatal but may indicate a protocol change
             tracing::debug!(
-                "Postgres backend returned non-empty message for CopyDone: \"{}\"",
+                "ClickHouse backend returned non-empty message for CopyDone: \"{}\"",
                 bytes.escape_ascii()
             )
         }

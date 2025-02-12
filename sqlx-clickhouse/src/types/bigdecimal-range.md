@@ -1,8 +1,8 @@
 #### Note: `BigDecimal` Has a Larger Range than `NUMERIC`
-`BigDecimal` can represent values with a far, far greater range than the `NUMERIC` type in Postgres can.
+`BigDecimal` can represent values with a far, far greater range than the `NUMERIC` type in ClickHouse can.
 
 `NUMERIC` is limited to 131,072 digits before the decimal point, and 16,384 digits after it. 
-See [Section 8.1, Numeric Types] of the Postgres manual for details.
+See [Section 8.1, Numeric Types] of the ClickHouse manual for details.
 
 Meanwhile, `BigDecimal` can theoretically represent a value with an arbitrary number of decimal digits, albeit
 with a maximum of 2<sup>63</sup> significant figures.

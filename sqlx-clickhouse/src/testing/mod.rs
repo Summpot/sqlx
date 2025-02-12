@@ -13,15 +13,15 @@ use crate::error::Error;
 use crate::executor::Executor;
 use crate::pool::{Pool, PoolOptions};
 use crate::query::query;
-use crate::{PgConnectOptions, PgConnection, Postgres};
+use crate::{ClickHouseConnectOptions, ClickHouseConnection, ClickHouse};
 
 pub(crate) use sqlx_core::testing::*;
 
 // Using a blocking `OnceCell` here because the critical sections are short.
-static MASTER_POOL: OnceCell<Pool<Postgres>> = OnceCell::new();
+static MASTER_POOL: OnceCell<Pool<ClickHouse>> = OnceCell::new();
 // Automatically delete any databases created before the start of the test binary.
 
-impl TestSupport for Postgres {
+impl TestSupport for ClickHouse {
     fn test_context(args: &TestArgs) -> BoxFuture<'_, Result<TestContext<Self>, Error>> {
         Box::pin(async move { test_context(args).await })
     }
@@ -42,7 +42,7 @@ impl TestSupport for Postgres {
         Box::pin(async move {
             let url = dotenvy::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-            let mut conn = PgConnection::connect(&url).await?;
+            let mut conn = ClickHouseConnection::connect(&url).await?;
 
             let delete_db_names: Vec<String> =
                 query_scalar("select db_name from _sqlx_test.databases")
@@ -92,13 +92,13 @@ impl TestSupport for Postgres {
     }
 }
 
-async fn test_context(args: &TestArgs) -> Result<TestContext<Postgres>, Error> {
+async fn test_context(args: &TestArgs) -> Result<TestContext<ClickHouse>, Error> {
     let url = dotenvy::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-    let master_opts = PgConnectOptions::from_str(&url).expect("failed to parse DATABASE_URL");
+    let master_opts = ClickHouseConnectOptions::from_str(&url).expect("failed to parse DATABASE_URL");
 
     let pool = PoolOptions::new()
-        // Postgres' normal connection limit is 100 plus 3 superuser connections
+        // ClickHouse' normal connection limit is 100 plus 3 superuser connections
         // We don't want to use the whole cap and there may be fuzziness here due to
         // concurrently running tests anyway.
         .max_connections(20)
@@ -128,7 +128,7 @@ async fn test_context(args: &TestArgs) -> Result<TestContext<Postgres>, Error> {
 
     let mut conn = master_pool.acquire().await?;
 
-    // language=PostgreSQL
+    // language=ClickHouse
     conn.execute(
         // Explicit lock avoids this latent bug: https://stackoverflow.com/a/29908840
         // I couldn't find a bug on the mailing list for `CREATE SCHEMA` specifically,
@@ -153,7 +153,7 @@ async fn test_context(args: &TestArgs) -> Result<TestContext<Postgres>, Error> {
     )
     .await?;
 
-    let db_name = Postgres::db_name(args);
+    let db_name = ClickHouse::db_name(args);
     do_cleanup(&mut conn, &db_name).await?;
 
     query(
@@ -188,7 +188,7 @@ async fn test_context(args: &TestArgs) -> Result<TestContext<Postgres>, Error> {
     })
 }
 
-async fn do_cleanup(conn: &mut PgConnection, db_name: &str) -> Result<(), Error> {
+async fn do_cleanup(conn: &mut ClickHouseConnection, db_name: &str) -> Result<(), Error> {
     let delete_db_command = format!("drop database if exists {db_name:?};");
     conn.execute(&*delete_db_command).await?;
     query("delete from _sqlx_test.databases where db_name = $1::text")

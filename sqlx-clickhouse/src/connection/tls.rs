@@ -3,9 +3,9 @@ use crate::net::tls::{self, TlsConfig};
 use crate::net::{Socket, SocketIntoBox, WithSocket};
 
 use crate::message::SslRequest;
-use crate::{PgConnectOptions, PgSslMode};
+use crate::{ClickHouseConnectOptions, ClickHouseSslMode};
 
-pub struct MaybeUpgradeTls<'a>(pub &'a PgConnectOptions);
+pub struct MaybeUpgradeTls<'a>(pub &'a ClickHouseConnectOptions);
 
 impl<'a> WithSocket for MaybeUpgradeTls<'a> {
     type Output = crate::Result<Box<dyn Socket>>;
@@ -17,14 +17,14 @@ impl<'a> WithSocket for MaybeUpgradeTls<'a> {
 
 async fn maybe_upgrade<S: Socket>(
     mut socket: S,
-    options: &PgConnectOptions,
+    options: &ClickHouseConnectOptions,
 ) -> Result<Box<dyn Socket>, Error> {
     // https://www.postgresql.org/docs/12/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
     match options.ssl_mode {
         // FIXME: Implement ALLOW
-        PgSslMode::Allow | PgSslMode::Disable => return Ok(Box::new(socket)),
+        ClickHouseSslMode::Allow | ClickHouseSslMode::Disable => return Ok(Box::new(socket)),
 
-        PgSslMode::Prefer => {
+        ClickHouseSslMode::Prefer => {
             if !tls::available() {
                 return Ok(Box::new(socket));
             }
@@ -35,7 +35,7 @@ async fn maybe_upgrade<S: Socket>(
             }
         }
 
-        PgSslMode::Require | PgSslMode::VerifyFull | PgSslMode::VerifyCa => {
+        ClickHouseSslMode::Require | ClickHouseSslMode::VerifyFull | ClickHouseSslMode::VerifyCa => {
             tls::error_if_unavailable()?;
 
             if !request_upgrade(&mut socket, options).await? {
@@ -47,9 +47,9 @@ async fn maybe_upgrade<S: Socket>(
 
     let accept_invalid_certs = !matches!(
         options.ssl_mode,
-        PgSslMode::VerifyCa | PgSslMode::VerifyFull
+        ClickHouseSslMode::VerifyCa | ClickHouseSslMode::VerifyFull
     );
-    let accept_invalid_hostnames = !matches!(options.ssl_mode, PgSslMode::VerifyFull);
+    let accept_invalid_hostnames = !matches!(options.ssl_mode, ClickHouseSslMode::VerifyFull);
 
     let config = TlsConfig {
         accept_invalid_certs,
@@ -65,7 +65,7 @@ async fn maybe_upgrade<S: Socket>(
 
 async fn request_upgrade(
     socket: &mut impl Socket,
-    _options: &PgConnectOptions,
+    _options: &ClickHouseConnectOptions,
 ) -> Result<bool, Error> {
     // https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.11
 

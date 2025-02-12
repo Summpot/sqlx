@@ -2,7 +2,7 @@ use std::num::Saturating;
 
 use sqlx_core::Error;
 
-use crate::io::{PgBufMutExt, PortalId};
+use crate::io::{ClickHouseBufMutExt, PortalId};
 use crate::message::{FrontendMessage, FrontendMessageFormat};
 
 pub struct Execute {

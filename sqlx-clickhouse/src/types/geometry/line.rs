@@ -2,13 +2,13 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use sqlx_core::bytes::Buf;
 use std::str::FromStr;
 
 const ERROR: &str = "error decoding LINE";
 
-/// ## Postgres Geometric Line type
+/// ## ClickHouse Geometric Line type
 ///
 /// Description: Infinite line
 /// Representation: `{A, B, C}`
@@ -17,45 +17,45 @@ const ERROR: &str = "error decoding LINE";
 ///
 /// See https://www.postgresql.org/docs/16/datatype-geometric.html#DATATYPE-LINE
 #[derive(Debug, Clone, PartialEq)]
-pub struct PgLine {
+pub struct ClickHouseLine {
     pub a: f64,
     pub b: f64,
     pub c: f64,
 }
 
-impl Type<Postgres> for PgLine {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("line")
+impl Type<ClickHouse> for ClickHouseLine {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("line")
     }
 }
 
-impl PgHasArrayType for PgLine {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_line")
+impl ClickHouseHasArrayType for ClickHouseLine {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_line")
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgLine {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseLine {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         match value.format() {
-            PgValueFormat::Text => Ok(PgLine::from_str(value.as_str()?)?),
-            PgValueFormat::Binary => Ok(PgLine::from_bytes(value.as_bytes()?)?),
+            ClickHouseValueFormat::Text => Ok(ClickHouseLine::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Binary => Ok(ClickHouseLine::from_bytes(value.as_bytes()?)?),
         }
     }
 }
 
-impl<'q> Encode<'q, Postgres> for PgLine {
-    fn produces(&self) -> Option<PgTypeInfo> {
-        Some(PgTypeInfo::with_name("line"))
+impl<'q> Encode<'q, ClickHouse> for ClickHouseLine {
+    fn produces(&self) -> Option<ClickHouseTypeInfo> {
+        Some(ClickHouseTypeInfo::with_name("line"))
     }
 
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.serialize(buf)?;
         Ok(IsNull::No)
     }
 }
 
-impl FromStr for PgLine {
+impl FromStr for ClickHouseLine {
     type Err = BoxDynError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -82,19 +82,19 @@ impl FromStr for PgLine {
             return Err(format!("{}: too many numbers inputted in {}", ERROR, s).into());
         }
 
-        Ok(PgLine { a, b, c })
+        Ok(ClickHouseLine { a, b, c })
     }
 }
 
-impl PgLine {
-    fn from_bytes(mut bytes: &[u8]) -> Result<PgLine, BoxDynError> {
+impl ClickHouseLine {
+    fn from_bytes(mut bytes: &[u8]) -> Result<ClickHouseLine, BoxDynError> {
         let a = bytes.get_f64();
         let b = bytes.get_f64();
         let c = bytes.get_f64();
-        Ok(PgLine { a, b, c })
+        Ok(ClickHouseLine { a, b, c })
     }
 
-    fn serialize(&self, buff: &mut PgArgumentBuffer) -> Result<(), BoxDynError> {
+    fn serialize(&self, buff: &mut ClickHouseArgumentBuffer) -> Result<(), BoxDynError> {
         buff.extend_from_slice(&self.a.to_be_bytes());
         buff.extend_from_slice(&self.b.to_be_bytes());
         buff.extend_from_slice(&self.c.to_be_bytes());
@@ -103,7 +103,7 @@ impl PgLine {
 
     #[cfg(test)]
     fn serialize_to_vec(&self) -> Vec<u8> {
-        let mut buff = PgArgumentBuffer::default();
+        let mut buff = ClickHouseArgumentBuffer::default();
         self.serialize(&mut buff).unwrap();
         buff.to_vec()
     }
@@ -114,7 +114,7 @@ mod line_tests {
 
     use std::str::FromStr;
 
-    use super::PgLine;
+    use super::ClickHouseLine;
 
     const LINE_BYTES: &[u8] = &[
         63, 241, 153, 153, 153, 153, 153, 154, 64, 1, 153, 153, 153, 153, 153, 154, 64, 10, 102,
@@ -123,10 +123,10 @@ mod line_tests {
 
     #[test]
     fn can_deserialise_line_type_bytes() {
-        let line = PgLine::from_bytes(LINE_BYTES).unwrap();
+        let line = ClickHouseLine::from_bytes(LINE_BYTES).unwrap();
         assert_eq!(
             line,
-            PgLine {
+            ClickHouseLine {
                 a: 1.1,
                 b: 2.2,
                 c: 3.3
@@ -136,10 +136,10 @@ mod line_tests {
 
     #[test]
     fn can_deserialise_line_type_str() {
-        let line = PgLine::from_str("{ 1, 2, 3 }").unwrap();
+        let line = ClickHouseLine::from_str("{ 1, 2, 3 }").unwrap();
         assert_eq!(
             line,
-            PgLine {
+            ClickHouseLine {
                 a: 1.0,
                 b: 2.0,
                 c: 3.0
@@ -150,7 +150,7 @@ mod line_tests {
     #[test]
     fn cannot_deserialise_line_too_few_numbers() {
         let input_str = "{ 1, 2 }";
-        let line = PgLine::from_str(input_str);
+        let line = ClickHouseLine::from_str(input_str);
         assert!(line.is_err());
         if let Err(err) = line {
             assert_eq!(
@@ -163,7 +163,7 @@ mod line_tests {
     #[test]
     fn cannot_deserialise_line_too_many_numbers() {
         let input_str = "{ 1, 2, 3, 4 }";
-        let line = PgLine::from_str(input_str);
+        let line = ClickHouseLine::from_str(input_str);
         assert!(line.is_err());
         if let Err(err) = line {
             assert_eq!(
@@ -176,7 +176,7 @@ mod line_tests {
     #[test]
     fn cannot_deserialise_line_invalid_numbers() {
         let input_str = "{ 1, 2, three }";
-        let line = PgLine::from_str(input_str);
+        let line = ClickHouseLine::from_str(input_str);
         assert!(line.is_err());
         if let Err(err) = line {
             assert_eq!(
@@ -188,10 +188,10 @@ mod line_tests {
 
     #[test]
     fn can_deserialise_line_type_str_float() {
-        let line = PgLine::from_str("{1.1, 2.2, 3.3}").unwrap();
+        let line = ClickHouseLine::from_str("{1.1, 2.2, 3.3}").unwrap();
         assert_eq!(
             line,
-            PgLine {
+            ClickHouseLine {
                 a: 1.1,
                 b: 2.2,
                 c: 3.3
@@ -201,7 +201,7 @@ mod line_tests {
 
     #[test]
     fn can_serialise_line_type() {
-        let line = PgLine {
+        let line = ClickHouseLine {
             a: 1.1,
             b: 2.2,
             c: 3.3,

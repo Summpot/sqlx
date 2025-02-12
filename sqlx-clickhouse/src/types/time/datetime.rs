@@ -3,47 +3,47 @@ use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::time::PG_EPOCH;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use std::borrow::Cow;
 use std::mem;
 use time::macros::format_description;
 use time::macros::offset;
 use time::{Duration, OffsetDateTime, PrimitiveDateTime};
 
-impl Type<Postgres> for PrimitiveDateTime {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMP
+impl Type<ClickHouse> for PrimitiveDateTime {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMP
     }
 }
 
-impl Type<Postgres> for OffsetDateTime {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMPTZ
+impl Type<ClickHouse> for OffsetDateTime {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMPTZ
     }
 }
 
-impl PgHasArrayType for PrimitiveDateTime {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMP_ARRAY
+impl ClickHouseHasArrayType for PrimitiveDateTime {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMP_ARRAY
     }
 }
 
-impl PgHasArrayType for OffsetDateTime {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMPTZ_ARRAY
+impl ClickHouseHasArrayType for OffsetDateTime {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMPTZ_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for PrimitiveDateTime {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for PrimitiveDateTime {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         // TIMESTAMP is encoded as the microseconds since the epoch
         let micros: i64 = (*self - PG_EPOCH.midnight())
             .whole_microseconds()
             .try_into()
             .map_err(|_| {
-                format!("value {self:?} would overflow binary encoding for Postgres TIME")
+                format!("value {self:?} would overflow binary encoding for ClickHouse TIME")
             })?;
-        Encode::<Postgres>::encode(micros, buf)
+        Encode::<ClickHouse>::encode(micros, buf)
     }
 
     fn size_hint(&self) -> usize {
@@ -51,16 +51,16 @@ impl Encode<'_, Postgres> for PrimitiveDateTime {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PrimitiveDateTime {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for PrimitiveDateTime {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         Ok(match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 // TIMESTAMP is encoded as the microseconds since the epoch
-                let us = Decode::<Postgres>::decode(value)?;
+                let us = Decode::<ClickHouse>::decode(value)?;
                 PG_EPOCH.midnight() + Duration::microseconds(us)
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let s = value.as_str()?;
 
                 // If there is no decimal point we need to add one.
@@ -72,7 +72,7 @@ impl<'r> Decode<'r, Postgres> for PrimitiveDateTime {
 
                 // Contains a time-zone specifier
                 // This is given for timestamptz for some reason
-                // Postgres already guarantees this to always be UTC
+                // ClickHouse already guarantees this to always be UTC
                 if s.contains('+') {
                     PrimitiveDateTime::parse(&s, &format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond][offset_hour]"))?
                 } else {
@@ -88,12 +88,12 @@ impl<'r> Decode<'r, Postgres> for PrimitiveDateTime {
     }
 }
 
-impl Encode<'_, Postgres> for OffsetDateTime {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for OffsetDateTime {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         let utc = self.to_offset(offset!(UTC));
         let primitive = PrimitiveDateTime::new(utc.date(), utc.time());
 
-        Encode::<Postgres>::encode(primitive, buf)
+        Encode::<ClickHouse>::encode(primitive, buf)
     }
 
     fn size_hint(&self) -> usize {
@@ -101,8 +101,8 @@ impl Encode<'_, Postgres> for OffsetDateTime {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for OffsetDateTime {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
-        Ok(<PrimitiveDateTime as Decode<Postgres>>::decode(value)?.assume_utc())
+impl<'r> Decode<'r, ClickHouse> for OffsetDateTime {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
+        Ok(<PrimitiveDateTime as Decode<ClickHouse>>::decode(value)?.assume_utc())
     }
 }

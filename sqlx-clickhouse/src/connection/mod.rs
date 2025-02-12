@@ -13,14 +13,14 @@ use crate::message::{
     BackendMessageFormat, Close, Query, ReadyForQuery, ReceivedMessage, Terminate,
     TransactionStatus,
 };
-use crate::statement::PgStatementMetadata;
+use crate::statement::ClickHouseStatementMetadata;
 use crate::transaction::Transaction;
 use crate::types::Oid;
-use crate::{PgConnectOptions, PgTypeInfo, Postgres};
+use crate::{ClickHouseConnectOptions, ClickHouseTypeInfo, ClickHouse};
 
 pub(crate) use sqlx_core::connection::*;
 
-pub use self::stream::PgStream;
+pub use self::stream::ClickHouseStream;
 
 pub(crate) mod describe;
 mod establish;
@@ -29,16 +29,16 @@ mod sasl;
 mod stream;
 mod tls;
 
-/// A connection to a PostgreSQL database.
-pub struct PgConnection {
-    pub(crate) inner: Box<PgConnectionInner>,
+/// A connection to a ClickHouse database.
+pub struct ClickHouseConnection {
+    pub(crate) inner: Box<ClickHouseConnectionInner>,
 }
 
-pub struct PgConnectionInner {
+pub struct ClickHouseConnectionInner {
     // underlying TCP or UDS stream,
     // wrapped in a potentially TLS stream,
     // wrapped in a buffered stream
-    pub(crate) stream: PgStream,
+    pub(crate) stream: ClickHouseStream,
 
     // process id of this backend
     // used to send cancel requests
@@ -51,14 +51,14 @@ pub struct PgConnectionInner {
     secret_key: u32,
 
     // sequence of statement IDs for use in preparing statements
-    // in PostgreSQL, the statement is prepared to a user-supplied identifier
+    // in ClickHouse, the statement is prepared to a user-supplied identifier
     next_statement_id: StatementId,
 
     // cache statement by query string to the id and columns
-    cache_statement: StatementCache<(StatementId, Arc<PgStatementMetadata>)>,
+    cache_statement: StatementCache<(StatementId, Arc<ClickHouseStatementMetadata>)>,
 
     // cache user-defined types by id <-> info
-    cache_type_info: HashMap<Oid, PgTypeInfo>,
+    cache_type_info: HashMap<Oid, ClickHouseTypeInfo>,
     cache_type_oid: HashMap<UStr, Oid>,
     cache_elem_type_to_array: HashMap<Oid, Oid>,
 
@@ -72,7 +72,7 @@ pub struct PgConnectionInner {
     log_settings: LogSettings,
 }
 
-impl PgConnection {
+impl ClickHouseConnection {
     /// the version number of the server in `libpq` format
     pub fn server_version_num(&self) -> Option<u32> {
         self.inner.stream.server_version_num
@@ -129,16 +129,16 @@ impl PgConnection {
     }
 }
 
-impl Debug for PgConnection {
+impl Debug for ClickHouseConnection {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PgConnection").finish()
+        f.debug_struct("ClickHouseConnection").finish()
     }
 }
 
-impl Connection for PgConnection {
-    type Database = Postgres;
+impl Connection for ClickHouseConnection {
+    type Database = ClickHouse;
 
-    type Options = PgConnectOptions;
+    type Options = ClickHouseConnectOptions;
 
     fn close(mut self) -> BoxFuture<'static, Result<(), Error>> {
         // The normal, graceful termination procedure is that the frontend sends a Terminate
@@ -226,12 +226,12 @@ impl Connection for PgConnection {
     }
 }
 
-// Implement `AsMut<Self>` so that `PgConnection` can be wrapped in
-// a `PgAdvisoryLockGuard`.
+// Implement `AsMut<Self>` so that `ClickHouseConnection` can be wrapped in
+// a `ClickHouseAdvisoryLockGuard`.
 //
 // See: https://github.com/launchbadge/sqlx/issues/2520
-impl AsMut<PgConnection> for PgConnection {
-    fn as_mut(&mut self) -> &mut PgConnection {
+impl AsMut<ClickHouseConnection> for ClickHouseConnection {
+    fn as_mut(&mut self) -> &mut ClickHouseConnection {
         self
     }
 }

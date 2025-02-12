@@ -5,10 +5,10 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
-/// The PostgreSQL [`OID`] type stores an object identifier,
-/// used internally by PostgreSQL as primary keys for various system tables.
+/// The ClickHouse [`OID`] type stores an object identifier,
+/// used internally by ClickHouse as primary keys for various system tables.
 ///
 /// [`OID`]: https://www.postgresql.org/docs/current/datatype-oid.html
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, Default)]
@@ -17,31 +17,31 @@ pub struct Oid(
     pub u32,
 );
 
-impl Type<Postgres> for Oid {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::OID
+impl Type<ClickHouse> for Oid {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::OID
     }
 }
 
-impl PgHasArrayType for Oid {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::OID_ARRAY
+impl ClickHouseHasArrayType for Oid {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::OID_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for Oid {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for Oid {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(&self.0.to_be_bytes());
 
         Ok(IsNull::No)
     }
 }
 
-impl Decode<'_, Postgres> for Oid {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for Oid {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         Ok(Self(match value.format() {
-            PgValueFormat::Binary => BigEndian::read_u32(value.as_bytes()?),
-            PgValueFormat::Text => value.as_str()?.parse()?,
+            ClickHouseValueFormat::Binary => BigEndian::read_u32(value.as_bytes()?),
+            ClickHouseValueFormat::Text => value.as_str()?.parse()?,
         }))
     }
 }

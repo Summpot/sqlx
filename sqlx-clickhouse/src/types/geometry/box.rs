@@ -2,13 +2,13 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use sqlx_core::bytes::Buf;
 use std::str::FromStr;
 
 const ERROR: &str = "error decoding BOX";
 
-/// ## Postgres Geometric Box type
+/// ## ClickHouse Geometric Box type
 ///
 /// Description: Rectangular box
 /// Representation: `((upper_right_x,upper_right_y),(lower_left_x,lower_left_y))`
@@ -25,46 +25,46 @@ const ERROR: &str = "error decoding BOX";
 ///
 /// See https://www.postgresql.org/docs/16/datatype-geometric.html#DATATYPE-GEOMETRIC-BOXES
 #[derive(Debug, Clone, PartialEq)]
-pub struct PgBox {
+pub struct ClickHouseBox {
     pub upper_right_x: f64,
     pub upper_right_y: f64,
     pub lower_left_x: f64,
     pub lower_left_y: f64,
 }
 
-impl Type<Postgres> for PgBox {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("box")
+impl Type<ClickHouse> for ClickHouseBox {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("box")
     }
 }
 
-impl PgHasArrayType for PgBox {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_box")
+impl ClickHouseHasArrayType for ClickHouseBox {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_box")
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgBox {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseBox {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         match value.format() {
-            PgValueFormat::Text => Ok(PgBox::from_str(value.as_str()?)?),
-            PgValueFormat::Binary => Ok(PgBox::from_bytes(value.as_bytes()?)?),
+            ClickHouseValueFormat::Text => Ok(ClickHouseBox::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Binary => Ok(ClickHouseBox::from_bytes(value.as_bytes()?)?),
         }
     }
 }
 
-impl<'q> Encode<'q, Postgres> for PgBox {
-    fn produces(&self) -> Option<PgTypeInfo> {
-        Some(PgTypeInfo::with_name("box"))
+impl<'q> Encode<'q, ClickHouse> for ClickHouseBox {
+    fn produces(&self) -> Option<ClickHouseTypeInfo> {
+        Some(ClickHouseTypeInfo::with_name("box"))
     }
 
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.serialize(buf)?;
         Ok(IsNull::No)
     }
 }
 
-impl FromStr for PgBox {
+impl FromStr for ClickHouseBox {
     type Err = BoxDynError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -95,7 +95,7 @@ impl FromStr for PgBox {
             return Err(format!("{}: too many numbers inputted in {}", ERROR, s).into());
         }
 
-        Ok(PgBox {
+        Ok(ClickHouseBox {
             upper_right_x,
             upper_right_y,
             lower_left_x,
@@ -104,14 +104,14 @@ impl FromStr for PgBox {
     }
 }
 
-impl PgBox {
-    fn from_bytes(mut bytes: &[u8]) -> Result<PgBox, BoxDynError> {
+impl ClickHouseBox {
+    fn from_bytes(mut bytes: &[u8]) -> Result<ClickHouseBox, BoxDynError> {
         let upper_right_x = bytes.get_f64();
         let upper_right_y = bytes.get_f64();
         let lower_left_x = bytes.get_f64();
         let lower_left_y = bytes.get_f64();
 
-        Ok(PgBox {
+        Ok(ClickHouseBox {
             upper_right_x,
             upper_right_y,
             lower_left_x,
@@ -119,7 +119,7 @@ impl PgBox {
         })
     }
 
-    fn serialize(&self, buff: &mut PgArgumentBuffer) -> Result<(), String> {
+    fn serialize(&self, buff: &mut ClickHouseArgumentBuffer) -> Result<(), String> {
         let min_x = &self.upper_right_x.min(self.lower_left_x);
         let min_y = &self.upper_right_y.min(self.lower_left_y);
         let max_x = &self.upper_right_x.max(self.lower_left_x);
@@ -135,7 +135,7 @@ impl PgBox {
 
     #[cfg(test)]
     fn serialize_to_vec(&self) -> Vec<u8> {
-        let mut buff = PgArgumentBuffer::default();
+        let mut buff = ClickHouseArgumentBuffer::default();
         self.serialize(&mut buff).unwrap();
         buff.to_vec()
     }
@@ -146,7 +146,7 @@ mod box_tests {
 
     use std::str::FromStr;
 
-    use super::PgBox;
+    use super::ClickHouseBox;
 
     const BOX_BYTES: &[u8] = &[
         64, 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0,
@@ -155,10 +155,10 @@ mod box_tests {
 
     #[test]
     fn can_deserialise_box_type_bytes_in_order() {
-        let pg_box = PgBox::from_bytes(BOX_BYTES).unwrap();
+        let pg_box = ClickHouseBox::from_bytes(BOX_BYTES).unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 2.,
                 upper_right_y: 2.,
                 lower_left_x: -2.,
@@ -169,10 +169,10 @@ mod box_tests {
 
     #[test]
     fn can_deserialise_box_type_str_first_syntax() {
-        let pg_box = PgBox::from_str("[( 1, 2), (3, 4 )]").unwrap();
+        let pg_box = ClickHouseBox::from_str("[( 1, 2), (3, 4 )]").unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 1.,
                 upper_right_y: 2.,
                 lower_left_x: 3.,
@@ -182,10 +182,10 @@ mod box_tests {
     }
     #[test]
     fn can_deserialise_box_type_str_second_syntax() {
-        let pg_box = PgBox::from_str("(( 1, 2), (3, 4 ))").unwrap();
+        let pg_box = ClickHouseBox::from_str("(( 1, 2), (3, 4 ))").unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 1.,
                 upper_right_y: 2.,
                 lower_left_x: 3.,
@@ -196,10 +196,10 @@ mod box_tests {
 
     #[test]
     fn can_deserialise_box_type_str_third_syntax() {
-        let pg_box = PgBox::from_str("(1, 2), (3, 4 )").unwrap();
+        let pg_box = ClickHouseBox::from_str("(1, 2), (3, 4 )").unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 1.,
                 upper_right_y: 2.,
                 lower_left_x: 3.,
@@ -210,10 +210,10 @@ mod box_tests {
 
     #[test]
     fn can_deserialise_box_type_str_fourth_syntax() {
-        let pg_box = PgBox::from_str("1, 2, 3, 4").unwrap();
+        let pg_box = ClickHouseBox::from_str("1, 2, 3, 4").unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 1.,
                 upper_right_y: 2.,
                 lower_left_x: 3.,
@@ -225,7 +225,7 @@ mod box_tests {
     #[test]
     fn cannot_deserialise_too_many_numbers() {
         let input_str = "1, 2, 3, 4, 5";
-        let pg_box = PgBox::from_str(input_str);
+        let pg_box = ClickHouseBox::from_str(input_str);
         assert!(pg_box.is_err());
         if let Err(err) = pg_box {
             assert_eq!(
@@ -238,7 +238,7 @@ mod box_tests {
     #[test]
     fn cannot_deserialise_too_few_numbers() {
         let input_str = "1, 2, 3 ";
-        let pg_box = PgBox::from_str(input_str);
+        let pg_box = ClickHouseBox::from_str(input_str);
         assert!(pg_box.is_err());
         if let Err(err) = pg_box {
             assert_eq!(
@@ -251,7 +251,7 @@ mod box_tests {
     #[test]
     fn cannot_deserialise_invalid_numbers() {
         let input_str = "1, 2, 3, FOUR";
-        let pg_box = PgBox::from_str(input_str);
+        let pg_box = ClickHouseBox::from_str(input_str);
         assert!(pg_box.is_err());
         if let Err(err) = pg_box {
             assert_eq!(
@@ -263,10 +263,10 @@ mod box_tests {
 
     #[test]
     fn can_deserialise_box_type_str_float() {
-        let pg_box = PgBox::from_str("(1.1, 2.2), (3.3, 4.4)").unwrap();
+        let pg_box = ClickHouseBox::from_str("(1.1, 2.2), (3.3, 4.4)").unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 1.1,
                 upper_right_y: 2.2,
                 lower_left_x: 3.3,
@@ -277,7 +277,7 @@ mod box_tests {
 
     #[test]
     fn can_serialise_box_type_in_order() {
-        let pg_box = PgBox {
+        let pg_box = ClickHouseBox {
             upper_right_x: 2.,
             lower_left_x: -2.,
             upper_right_y: -2.,
@@ -288,7 +288,7 @@ mod box_tests {
 
     #[test]
     fn can_serialise_box_type_out_of_order() {
-        let pg_box = PgBox {
+        let pg_box = ClickHouseBox {
             upper_right_x: -2.,
             lower_left_x: 2.,
             upper_right_y: 2.,
@@ -299,7 +299,7 @@ mod box_tests {
 
     #[test]
     fn can_order_box() {
-        let pg_box = PgBox {
+        let pg_box = ClickHouseBox {
             upper_right_x: -2.,
             lower_left_x: 2.,
             upper_right_y: 2.,
@@ -307,10 +307,10 @@ mod box_tests {
         };
         let bytes = pg_box.serialize_to_vec();
 
-        let pg_box = PgBox::from_bytes(&bytes).unwrap();
+        let pg_box = ClickHouseBox::from_bytes(&bytes).unwrap();
         assert_eq!(
             pg_box,
-            PgBox {
+            ClickHouseBox {
                 upper_right_x: 2.,
                 upper_right_y: 2.,
                 lower_left_x: -2.,

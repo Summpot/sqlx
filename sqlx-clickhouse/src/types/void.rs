@@ -1,21 +1,21 @@
 use crate::decode::Decode;
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgTypeInfo, PgValueRef, Postgres};
+use crate::{ClickHouseTypeInfo, ClickHouseValueRef, ClickHouse};
 
-impl Type<Postgres> for () {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::VOID
+impl Type<ClickHouse> for () {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::VOID
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         // RECORD is here so we can support the empty tuple
-        *ty == PgTypeInfo::VOID || *ty == PgTypeInfo::RECORD
+        *ty == ClickHouseTypeInfo::VOID || *ty == ClickHouseTypeInfo::RECORD
     }
 }
 
-impl<'r> Decode<'r, Postgres> for () {
-    fn decode(_value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for () {
+    fn decode(_value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         Ok(())
     }
 }

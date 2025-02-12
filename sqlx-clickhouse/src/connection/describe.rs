@@ -4,12 +4,12 @@ use crate::io::StatementId;
 use crate::message::{ParameterDescription, RowDescription};
 use crate::query_as::query_as;
 use crate::query_scalar::query_scalar;
-use crate::statement::PgStatementMetadata;
-use crate::type_info::{PgArrayOf, PgCustomType, PgType, PgTypeKind};
+use crate::statement::ClickHouseStatementMetadata;
+use crate::type_info::{ClickHouseArrayOf, ClickHouseCustomType, ClickHouseType, ClickHouseTypeKind};
 use crate::types::Json;
 use crate::types::Oid;
 use crate::HashMap;
-use crate::{PgColumn, PgConnection, PgTypeInfo};
+use crate::{ClickHouseColumn, ClickHouseConnection, ClickHouseTypeInfo};
 use smallvec::SmallVec;
 use sqlx_core::query_builder::QueryBuilder;
 use std::sync::Arc;
@@ -96,12 +96,12 @@ impl TryFrom<i8> for TypCategory {
     }
 }
 
-impl PgConnection {
+impl ClickHouseConnection {
     pub(super) async fn handle_row_description(
         &mut self,
         desc: Option<RowDescription>,
         should_fetch: bool,
-    ) -> Result<(Vec<PgColumn>, HashMap<UStr, usize>), Error> {
+    ) -> Result<(Vec<ClickHouseColumn>, HashMap<UStr, usize>), Error> {
         let mut columns = Vec::new();
         let mut column_names = HashMap::new();
 
@@ -122,7 +122,7 @@ impl PgConnection {
                 .maybe_fetch_type_info_by_oid(field.data_type_id, should_fetch)
                 .await?;
 
-            let column = PgColumn {
+            let column = ClickHouseColumn {
                 ordinal: index,
                 name: name.clone(),
                 type_info,
@@ -140,7 +140,7 @@ impl PgConnection {
     pub(super) async fn handle_parameter_description(
         &mut self,
         desc: ParameterDescription,
-    ) -> Result<Vec<PgTypeInfo>, Error> {
+    ) -> Result<Vec<ClickHouseTypeInfo>, Error> {
         let mut params = Vec::with_capacity(desc.types.len());
 
         for ty in desc.types {
@@ -154,10 +154,10 @@ impl PgConnection {
         &mut self,
         oid: Oid,
         should_fetch: bool,
-    ) -> Result<PgTypeInfo, Error> {
+    ) -> Result<ClickHouseTypeInfo, Error> {
         // first we check if this is a built-in type
         // in the average application, the vast majority of checks should flow through this
-        if let Some(info) = PgTypeInfo::try_from_oid(oid) {
+        if let Some(info) = ClickHouseTypeInfo::try_from_oid(oid) {
             return Ok(info);
         }
 
@@ -186,11 +186,11 @@ impl PgConnection {
             // we're open to ideas to correct this.. but it'd probably be more efficient to figure
             // out a way to "prime" the type cache for connections rather than make this
             // fallback work correctly for complex user-defined types for the TEXT protocol
-            Ok(PgTypeInfo(PgType::DeclareWithOid(oid)))
+            Ok(ClickHouseTypeInfo(ClickHouseType::DeclareWithOid(oid)))
         }
     }
 
-    async fn fetch_type_by_oid(&mut self, oid: Oid) -> Result<PgTypeInfo, Error> {
+    async fn fetch_type_by_oid(&mut self, oid: Oid) -> Result<ClickHouseTypeInfo, Error> {
         let (name, typ_type, category, relation_id, element, base_type): (
             String,
             i8,
@@ -221,8 +221,8 @@ impl PgConnection {
             (Ok(TypType::Domain), _) => self.fetch_domain_by_oid(oid, base_type, name).await,
 
             (Ok(TypType::Base), Ok(TypCategory::Array)) => {
-                Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
-                    kind: PgTypeKind::Array(
+                Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
+                    kind: ClickHouseTypeKind::Array(
                         self.maybe_fetch_type_info_by_oid(element, true).await?,
                     ),
                     name: name.into(),
@@ -231,8 +231,8 @@ impl PgConnection {
             }
 
             (Ok(TypType::Pseudo), Ok(TypCategory::Pseudo)) => {
-                Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
-                    kind: PgTypeKind::Pseudo,
+                Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
+                    kind: ClickHouseTypeKind::Pseudo,
                     name: name.into(),
                     oid,
                 }))))
@@ -248,15 +248,15 @@ impl PgConnection {
                 self.fetch_composite_by_oid(oid, relation_id, name).await
             }
 
-            _ => Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
-                kind: PgTypeKind::Simple,
+            _ => Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
+                kind: ClickHouseTypeKind::Simple,
                 name: name.into(),
                 oid,
             })))),
         }
     }
 
-    async fn fetch_enum_by_oid(&mut self, oid: Oid, name: String) -> Result<PgTypeInfo, Error> {
+    async fn fetch_enum_by_oid(&mut self, oid: Oid, name: String) -> Result<ClickHouseTypeInfo, Error> {
         let variants: Vec<String> = query_scalar(
             r#"
 SELECT enumlabel
@@ -269,10 +269,10 @@ ORDER BY enumsortorder
         .fetch_all(self)
         .await?;
 
-        Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
+        Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
             oid,
             name: name.into(),
-            kind: PgTypeKind::Enum(Arc::from(variants)),
+            kind: ClickHouseTypeKind::Enum(Arc::from(variants)),
         }))))
     }
 
@@ -281,7 +281,7 @@ ORDER BY enumsortorder
         oid: Oid,
         relation_id: Oid,
         name: String,
-    ) -> Result<PgTypeInfo, Error> {
+    ) -> Result<ClickHouseTypeInfo, Error> {
         let raw_fields: Vec<(String, Oid)> = query_as(
             r#"
 SELECT attname, atttypid
@@ -304,10 +304,10 @@ ORDER BY attnum
             fields.push((field_name, field_type));
         }
 
-        Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
+        Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
             oid,
             name: name.into(),
-            kind: PgTypeKind::Composite(Arc::from(fields)),
+            kind: ClickHouseTypeKind::Composite(Arc::from(fields)),
         }))))
     }
 
@@ -316,17 +316,17 @@ ORDER BY attnum
         oid: Oid,
         base_type: Oid,
         name: String,
-    ) -> Result<PgTypeInfo, Error> {
+    ) -> Result<ClickHouseTypeInfo, Error> {
         let base_type = self.maybe_fetch_type_info_by_oid(base_type, true).await?;
 
-        Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
+        Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
             oid,
             name: name.into(),
-            kind: PgTypeKind::Domain(base_type),
+            kind: ClickHouseTypeKind::Domain(base_type),
         }))))
     }
 
-    async fn fetch_range_by_oid(&mut self, oid: Oid, name: String) -> Result<PgTypeInfo, Error> {
+    async fn fetch_range_by_oid(&mut self, oid: Oid, name: String) -> Result<ClickHouseTypeInfo, Error> {
         let element_oid: Oid = query_scalar(
             r#"
 SELECT rngsubtype
@@ -340,21 +340,21 @@ WHERE rngtypid = $1
 
         let element = self.maybe_fetch_type_info_by_oid(element_oid, true).await?;
 
-        Ok(PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
-            kind: PgTypeKind::Range(element),
+        Ok(ClickHouseTypeInfo(ClickHouseType::Custom(Arc::new(ClickHouseCustomType {
+            kind: ClickHouseTypeKind::Range(element),
             name: name.into(),
             oid,
         }))))
     }
 
-    pub(crate) async fn resolve_type_id(&mut self, ty: &PgType) -> Result<Oid, Error> {
+    pub(crate) async fn resolve_type_id(&mut self, ty: &ClickHouseType) -> Result<Oid, Error> {
         if let Some(oid) = ty.try_oid() {
             return Ok(oid);
         }
 
         match ty {
-            PgType::DeclareWithName(name) => self.fetch_type_id_by_name(name).await,
-            PgType::DeclareArrayOf(array) => self.fetch_array_type_id(array).await,
+            ClickHouseType::DeclareWithName(name) => self.fetch_type_id_by_name(name).await,
+            ClickHouseType::DeclareArrayOf(array) => self.fetch_array_type_id(array).await,
             // `.try_oid()` should return `Some()` or it should be covered here
             _ => unreachable!("(bug) OID should be resolvable for type {ty:?}"),
         }
@@ -380,7 +380,7 @@ WHERE rngtypid = $1
         Ok(oid)
     }
 
-    pub(crate) async fn fetch_array_type_id(&mut self, array: &PgArrayOf) -> Result<Oid, Error> {
+    pub(crate) async fn fetch_array_type_id(&mut self, array: &ClickHouseArrayOf) -> Result<Oid, Error> {
         if let Some(oid) = self
             .inner
             .cache_type_oid
@@ -424,7 +424,7 @@ WHERE rngtypid = $1
     pub(crate) async fn get_nullable_for_columns(
         &mut self,
         stmt_id: StatementId,
-        meta: &PgStatementMetadata,
+        meta: &ClickHouseStatementMetadata,
     ) -> Result<Vec<Option<bool>>, Error> {
         if meta.columns.is_empty() {
             return Ok(vec![]);
@@ -442,7 +442,7 @@ WHERE rngtypid = $1
         //
         // This will include columns that don't have a `relation_id` (are not from a table);
         // assuming those are a minority of columns, it's less code to _not_ work around it
-        // and just let Postgres return `NULL`.
+        // and just let ClickHouse return `NULL`.
         //
         // Use `UNION ALL` syntax instead of `VALUES` due to frequent lack of
         // support for `VALUES` in pgwire supported databases.

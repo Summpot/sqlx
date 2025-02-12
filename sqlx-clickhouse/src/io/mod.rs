@@ -1,6 +1,6 @@
 mod buf_mut;
 
-pub use buf_mut::PgBufMutExt;
+pub use buf_mut::ClickHouseBufMutExt;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::num::{NonZeroU32, Saturating};

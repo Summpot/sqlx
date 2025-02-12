@@ -14,24 +14,24 @@ use crate::message::{
     ParameterStatus, ReceivedMessage,
 };
 use crate::net::{self, BufferedSocket, Socket};
-use crate::{PgConnectOptions, PgDatabaseError, PgSeverity};
+use crate::{ClickHouseConnectOptions, ClickHouseDatabaseError, ClickHouseSeverity};
 
 // the stream is a separate type from the connection to uphold the invariant where an instantiated
-// [PgConnection] is a **valid** connection to postgres
+// [ClickHouseConnection] is a **valid** connection to postgres
 
-// when a new connection is asked for, we work directly on the [PgStream] type until the
+// when a new connection is asked for, we work directly on the [ClickHouseStream] type until the
 // connection is fully established
 
-// in other words, `self` in any PgConnection method is a live connection to postgres that
+// in other words, `self` in any ClickHouseConnection method is a live connection to postgres that
 // is fully prepared to receive queries
 
-pub struct PgStream {
+pub struct ClickHouseStream {
     // A trait object is okay here as the buffering amortizes the overhead of both the dynamic
     // function call as well as the syscall.
     inner: BufferedSocket<Box<dyn Socket>>,
 
     // buffer of unreceived notification messages from `PUBLISH`
-    // this is set when creating a PgListener and only written to if that listener is
+    // this is set when creating a ClickHouseListener and only written to if that listener is
     // re-used for query execution in-between receiving messages
     pub(crate) notifications: Option<UnboundedSender<Notification>>,
 
@@ -40,8 +40,8 @@ pub struct PgStream {
     pub(crate) server_version_num: Option<u32>,
 }
 
-impl PgStream {
-    pub(super) async fn connect(options: &PgConnectOptions) -> Result<Self, Error> {
+impl ClickHouseStream {
+    pub(super) async fn connect(options: &ClickHouseConnectOptions) -> Result<Self, Error> {
         let socket_result = match options.fetch_socket() {
             Some(ref path) => net::connect_uds(path, MaybeUpgradeTls(options)).await?,
             None => net::connect_tcp(&options.host, options.port, MaybeUpgradeTls(options)).await?,
@@ -127,7 +127,7 @@ impl PgStream {
             match message.format {
                 BackendMessageFormat::ErrorResponse => {
                     // An error returned from the database server.
-                    return Err(message.decode::<PgDatabaseError>()?.into());
+                    return Err(message.decode::<ClickHouseDatabaseError>()?.into());
                 }
 
                 BackendMessageFormat::NotificationResponse => {
@@ -165,13 +165,13 @@ impl PgStream {
                     let notice: Notice = message.decode()?;
 
                     let (log_level, tracing_level) = match notice.severity() {
-                        PgSeverity::Fatal | PgSeverity::Panic | PgSeverity::Error => {
+                        ClickHouseSeverity::Fatal | ClickHouseSeverity::Panic | ClickHouseSeverity::Error => {
                             (Level::Error, tracing::Level::ERROR)
                         }
-                        PgSeverity::Warning => (Level::Warn, tracing::Level::WARN),
-                        PgSeverity::Notice => (Level::Info, tracing::Level::INFO),
-                        PgSeverity::Debug => (Level::Debug, tracing::Level::DEBUG),
-                        PgSeverity::Info | PgSeverity::Log => (Level::Trace, tracing::Level::TRACE),
+                        ClickHouseSeverity::Warning => (Level::Warn, tracing::Level::WARN),
+                        ClickHouseSeverity::Notice => (Level::Info, tracing::Level::INFO),
+                        ClickHouseSeverity::Debug => (Level::Debug, tracing::Level::DEBUG),
+                        ClickHouseSeverity::Info | ClickHouseSeverity::Log => (Level::Trace, tracing::Level::TRACE),
                     };
 
                     let log_is_enabled = log::log_enabled!(
@@ -200,7 +200,7 @@ impl PgStream {
     }
 }
 
-impl Deref for PgStream {
+impl Deref for ClickHouseStream {
     type Target = BufferedSocket<Box<dyn Socket>>;
 
     #[inline]
@@ -209,7 +209,7 @@ impl Deref for PgStream {
     }
 }
 
-impl DerefMut for PgStream {
+impl DerefMut for ClickHouseStream {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner

@@ -1,21 +1,21 @@
 use crate::ext::ustr::UStr;
-use crate::{PgTypeInfo, Postgres};
+use crate::{ClickHouseTypeInfo, ClickHouse};
 
 pub(crate) use sqlx_core::column::{Column, ColumnIndex};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "offline", derive(serde::Serialize, serde::Deserialize))]
-pub struct PgColumn {
+pub struct ClickHouseColumn {
     pub(crate) ordinal: usize,
     pub(crate) name: UStr,
-    pub(crate) type_info: PgTypeInfo,
+    pub(crate) type_info: ClickHouseTypeInfo,
     #[cfg_attr(feature = "offline", serde(skip))]
     pub(crate) relation_id: Option<crate::types::Oid>,
     #[cfg_attr(feature = "offline", serde(skip))]
     pub(crate) relation_attribute_no: Option<i16>,
 }
 
-impl PgColumn {
+impl ClickHouseColumn {
     /// Returns the OID of the table this column is from, if applicable.
     ///
     /// This will be `None` if the column is the result of an expression.
@@ -37,8 +37,8 @@ impl PgColumn {
     }
 }
 
-impl Column for PgColumn {
-    type Database = Postgres;
+impl Column for ClickHouseColumn {
+    type Database = ClickHouse;
 
     fn ordinal(&self) -> usize {
         self.ordinal
@@ -48,7 +48,7 @@ impl Column for PgColumn {
         &self.name
     }
 
-    fn type_info(&self) -> &PgTypeInfo {
+    fn type_info(&self) -> &ClickHouseTypeInfo {
         &self.type_info
     }
 }

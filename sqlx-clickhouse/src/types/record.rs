@@ -4,21 +4,21 @@ use crate::decode::Decode;
 use crate::encode::Encode;
 use crate::error::{mismatched_types, BoxDynError};
 use crate::type_info::TypeInfo;
-use crate::type_info::{PgType, PgTypeKind};
+use crate::type_info::{ClickHouseType, ClickHouseTypeKind};
 use crate::types::Oid;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
 #[doc(hidden)]
-pub struct PgRecordEncoder<'a> {
-    buf: &'a mut PgArgumentBuffer,
+pub struct ClickHouseRecordEncoder<'a> {
+    buf: &'a mut ClickHouseArgumentBuffer,
     off: usize,
     num: u32,
 }
 
-impl<'a> PgRecordEncoder<'a> {
+impl<'a> ClickHouseRecordEncoder<'a> {
     #[doc(hidden)]
-    pub fn new(buf: &'a mut PgArgumentBuffer) -> Self {
+    pub fn new(buf: &'a mut ClickHouseArgumentBuffer) -> Self {
         let off = buf.len();
 
         // reserve space for a field count
@@ -37,15 +37,15 @@ impl<'a> PgRecordEncoder<'a> {
     pub fn encode<'q, T>(&mut self, value: T) -> Result<&mut Self, BoxDynError>
     where
         'a: 'q,
-        T: Encode<'q, Postgres> + Type<Postgres>,
+        T: Encode<'q, ClickHouse> + Type<ClickHouse>,
     {
         let ty = value.produces().unwrap_or_else(T::type_info);
 
         match ty.0 {
             // push a hole for this type ID
             // to be filled in on query execution
-            PgType::DeclareWithName(name) => self.buf.patch_type_by_name(&name),
-            PgType::DeclareArrayOf(array) => self.buf.patch_array_type(array),
+            ClickHouseType::DeclareWithName(name) => self.buf.patch_type_by_name(&name),
+            ClickHouseType::DeclareArrayOf(array) => self.buf.patch_array_type(array),
             // write type id
             pg_type => self.buf.extend(&pg_type.oid().0.to_be_bytes()),
         }
@@ -58,26 +58,26 @@ impl<'a> PgRecordEncoder<'a> {
 }
 
 #[doc(hidden)]
-pub struct PgRecordDecoder<'r> {
+pub struct ClickHouseRecordDecoder<'r> {
     buf: &'r [u8],
-    typ: PgTypeInfo,
-    fmt: PgValueFormat,
+    typ: ClickHouseTypeInfo,
+    fmt: ClickHouseValueFormat,
     ind: usize,
 }
 
-impl<'r> PgRecordDecoder<'r> {
+impl<'r> ClickHouseRecordDecoder<'r> {
     #[doc(hidden)]
-    pub fn new(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    pub fn new(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         let fmt = value.format();
         let mut buf = value.as_bytes()?;
         let typ = value.type_info;
 
         match fmt {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let _len = buf.get_u32();
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 // remove the enclosing `(` .. `)`
                 buf = &buf[1..(buf.len() - 1)];
             }
@@ -94,21 +94,21 @@ impl<'r> PgRecordDecoder<'r> {
     #[doc(hidden)]
     pub fn try_decode<T>(&mut self) -> Result<T, BoxDynError>
     where
-        T: for<'a> Decode<'a, Postgres> + Type<Postgres>,
+        T: for<'a> Decode<'a, ClickHouse> + Type<ClickHouse>,
     {
         if self.buf.is_empty() {
             return Err(format!("no field `{0}` found on record", self.ind).into());
         }
 
         match self.fmt {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let element_type_oid = Oid(self.buf.get_u32());
                 let element_type_opt = match self.typ.0.kind() {
-                    PgTypeKind::Simple if self.typ.0 == PgType::Record => {
-                        PgTypeInfo::try_from_oid(element_type_oid)
+                    ClickHouseTypeKind::Simple if self.typ.0 == ClickHouseType::Record => {
+                        ClickHouseTypeInfo::try_from_oid(element_type_oid)
                     }
 
-                    PgTypeKind::Composite(fields) => {
+                    ClickHouseTypeKind::Composite(fields) => {
                         let ty = fields[self.ind].1.clone();
                         if ty.0.oid() != element_type_oid {
                             return Err("unexpected mismatch of composite type information".into());
@@ -127,7 +127,7 @@ impl<'r> PgRecordDecoder<'r> {
 
                 if let Some(ty) = &element_type_opt {
                     if !ty.is_null() && !T::compatible(ty) {
-                        return Err(mismatched_types::<Postgres, T>(ty));
+                        return Err(mismatched_types::<ClickHouse, T>(ty));
                     }
                 }
 
@@ -137,10 +137,10 @@ impl<'r> PgRecordDecoder<'r> {
 
                 self.ind += 1;
 
-                T::decode(PgValueRef::get(&mut self.buf, self.fmt, element_type)?)
+                T::decode(ClickHouseValueRef::get(&mut self.buf, self.fmt, element_type)?)
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let mut element = String::new();
                 let mut quoted = false;
                 let mut in_quotes = false;
@@ -191,10 +191,10 @@ impl<'r> PgRecordDecoder<'r> {
                 // NOTE: we do not call [`accepts`] or give a chance to from a user as
                 //       TEXT sequences are not strongly typed
 
-                T::decode(PgValueRef {
+                T::decode(ClickHouseValueRef {
                     // NOTE: We pass `0` as the type ID because we don't have a reasonable value
                     //       we could use.
-                    type_info: PgTypeInfo::with_oid(Oid(0)),
+                    type_info: ClickHouseTypeInfo::with_oid(Oid(0)),
                     format: self.fmt,
                     value: buf,
                     row: None,

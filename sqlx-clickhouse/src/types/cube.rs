@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use sqlx_core::bytes::Buf;
 use sqlx_core::Error;
 use std::mem;
@@ -18,7 +18,7 @@ const IS_POINT_FLAG: u32 = 1 << 31;
 // FIXME(breaking): these variants are confusingly named and structured
 // consider changing them or making this an opaque wrapper around `Vec<f64>`
 #[derive(Debug, Clone, PartialEq)]
-pub enum PgCube {
+pub enum ClickHouseCube {
     /// A one-dimensional point.
     // FIXME: `Point1D(f64)
     Point(f64),
@@ -50,33 +50,33 @@ struct DecodeError {
     message: String,
 }
 
-impl Type<Postgres> for PgCube {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("cube")
+impl Type<ClickHouse> for ClickHouseCube {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("cube")
     }
 }
 
-impl PgHasArrayType for PgCube {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_cube")
+impl ClickHouseHasArrayType for ClickHouseCube {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_cube")
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgCube {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseCube {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         match value.format() {
-            PgValueFormat::Text => Ok(PgCube::from_str(value.as_str()?)?),
-            PgValueFormat::Binary => Ok(PgCube::from_bytes(value.as_bytes()?)?),
+            ClickHouseValueFormat::Text => Ok(ClickHouseCube::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Binary => Ok(ClickHouseCube::from_bytes(value.as_bytes()?)?),
         }
     }
 }
 
-impl<'q> Encode<'q, Postgres> for PgCube {
-    fn produces(&self) -> Option<PgTypeInfo> {
-        Some(PgTypeInfo::with_name("cube"))
+impl<'q> Encode<'q, ClickHouse> for ClickHouseCube {
+    fn produces(&self) -> Option<ClickHouseTypeInfo> {
+        Some(ClickHouseTypeInfo::with_name("cube"))
     }
 
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.serialize(buf)?;
         Ok(IsNull::No)
     }
@@ -86,7 +86,7 @@ impl<'q> Encode<'q, Postgres> for PgCube {
     }
 }
 
-impl FromStr for PgCube {
+impl FromStr for ClickHouseCube {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -114,22 +114,22 @@ impl FromStr for PgCube {
     }
 }
 
-impl PgCube {
+impl ClickHouseCube {
     fn header(&self) -> Header {
         match self {
-            PgCube::Point(..) => Header {
+            ClickHouseCube::Point(..) => Header {
                 is_point: true,
                 dimensions: 1,
             },
-            PgCube::ZeroVolume(values) => Header {
+            ClickHouseCube::ZeroVolume(values) => Header {
                 is_point: true,
                 dimensions: values.len(),
             },
-            PgCube::OneDimensionInterval(..) => Header {
+            ClickHouseCube::OneDimensionInterval(..) => Header {
                 is_point: false,
                 dimensions: 1,
             },
-            PgCube::MultiDimension(multi_values) => Header {
+            ClickHouseCube::MultiDimension(multi_values) => Header {
                 is_point: false,
                 dimensions: multi_values.first().map(|arr| arr.len()).unwrap_or(0),
             },
@@ -152,19 +152,19 @@ impl PgCube {
         }
 
         match (header.is_point, header.dimensions) {
-            (true, 1) => Ok(PgCube::Point(bytes.get_f64())),
-            (true, _) => Ok(PgCube::ZeroVolume(
+            (true, 1) => Ok(ClickHouseCube::Point(bytes.get_f64())),
+            (true, _) => Ok(ClickHouseCube::ZeroVolume(
                 read_vec(&mut bytes).map_err(|e| DecodeError::new(&header, e))?,
             )),
-            (false, 1) => Ok(PgCube::OneDimensionInterval(
+            (false, 1) => Ok(ClickHouseCube::OneDimensionInterval(
                 bytes.get_f64(),
                 bytes.get_f64(),
             )),
-            (false, _) => Ok(PgCube::MultiDimension(read_cube(&header, bytes)?)),
+            (false, _) => Ok(ClickHouseCube::MultiDimension(read_cube(&header, bytes)?)),
         }
     }
 
-    fn serialize(&self, buff: &mut PgArgumentBuffer) -> Result<(), String> {
+    fn serialize(&self, buff: &mut ClickHouseArgumentBuffer) -> Result<(), String> {
         let header = self.header();
 
         buff.reserve(header.data_size());
@@ -172,17 +172,17 @@ impl PgCube {
         header.try_write(buff)?;
 
         match self {
-            PgCube::Point(value) => {
+            ClickHouseCube::Point(value) => {
                 buff.extend_from_slice(&value.to_be_bytes());
             }
-            PgCube::ZeroVolume(values) => {
+            ClickHouseCube::ZeroVolume(values) => {
                 buff.extend(values.iter().flat_map(|v| v.to_be_bytes()));
             }
-            PgCube::OneDimensionInterval(x, y) => {
+            ClickHouseCube::OneDimensionInterval(x, y) => {
                 buff.extend_from_slice(&x.to_be_bytes());
                 buff.extend_from_slice(&y.to_be_bytes());
             }
-            PgCube::MultiDimension(multi_values) => {
+            ClickHouseCube::MultiDimension(multi_values) => {
                 if multi_values.len() != 2 {
                     return Err(format!("invalid CUBE value: {self:?}"));
                 }
@@ -199,7 +199,7 @@ impl PgCube {
 
     #[cfg(test)]
     fn serialize_to_vec(&self) -> Vec<u8> {
-        let mut buff = PgArgumentBuffer::default();
+        let mut buff = ClickHouseArgumentBuffer::default();
         self.serialize(&mut buff).unwrap();
         buff.to_vec()
     }
@@ -251,22 +251,22 @@ fn parse_float_from_str(s: &str, error_msg: &str) -> Result<f64, Error> {
     s.parse().map_err(|_| Error::Decode(error_msg.into()))
 }
 
-fn parse_point(str: &str) -> Result<PgCube, Error> {
-    Ok(PgCube::Point(parse_float_from_str(
+fn parse_point(str: &str) -> Result<ClickHouseCube, Error> {
+    Ok(ClickHouseCube::Point(parse_float_from_str(
         str,
         "Failed to parse point",
     )?))
 }
 
-fn parse_zero_volume(content: &str) -> Result<PgCube, Error> {
+fn parse_zero_volume(content: &str) -> Result<ClickHouseCube, Error> {
     content
         .split(',')
         .map(|p| parse_float_from_str(p, "Failed to parse into zero-volume cube"))
         .collect::<Result<Vec<_>, _>>()
-        .map(PgCube::ZeroVolume)
+        .map(ClickHouseCube::ZeroVolume)
 }
 
-fn parse_one_dimensional_interval(point_vecs: Vec<&str>) -> Result<PgCube, Error> {
+fn parse_one_dimensional_interval(point_vecs: Vec<&str>) -> Result<ClickHouseCube, Error> {
     let x = parse_float_from_str(
         &remove_parentheses(point_vecs.first().ok_or(Error::Decode(
             format!("Could not decode cube interval x: {:?}", point_vecs).into(),
@@ -279,10 +279,10 @@ fn parse_one_dimensional_interval(point_vecs: Vec<&str>) -> Result<PgCube, Error
         ))?),
         "Failed to parse Y in one-dimensional interval",
     )?;
-    Ok(PgCube::OneDimensionInterval(x, y))
+    Ok(ClickHouseCube::OneDimensionInterval(x, y))
 }
 
-fn parse_multidimensional_interval(point_vecs: Vec<&str>) -> Result<PgCube, Error> {
+fn parse_multidimensional_interval(point_vecs: Vec<&str>) -> Result<ClickHouseCube, Error> {
     point_vecs
         .iter()
         .map(|&point_vec| {
@@ -297,7 +297,7 @@ fn parse_multidimensional_interval(point_vecs: Vec<&str>) -> Result<PgCube, Erro
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()
-        .map(PgCube::MultiDimension)
+        .map(ClickHouseCube::MultiDimension)
 }
 
 fn remove_parentheses(s: &str) -> String {
@@ -319,7 +319,7 @@ impl Header {
         }
     }
 
-    fn try_write(&self, buff: &mut PgArgumentBuffer) -> Result<(), String> {
+    fn try_write(&self, buff: &mut ClickHouseArgumentBuffer) -> Result<(), String> {
         if self.dimensions > MAX_DIMENSIONS {
             return Err(format!(
                 "CUBE dimensionality exceeds allowed maximum ({} > {MAX_DIMENSIONS})",
@@ -383,7 +383,7 @@ mod cube_tests {
 
     use std::str::FromStr;
 
-    use super::PgCube;
+    use super::ClickHouseCube;
 
     const POINT_BYTES: &[u8] = &[128, 0, 0, 1, 64, 0, 0, 0, 0, 0, 0, 0];
     const ZERO_VOLUME_BYTES: &[u8] = &[
@@ -403,134 +403,134 @@ mod cube_tests {
 
     #[test]
     fn can_deserialise_point_type_byes() {
-        let cube = PgCube::from_bytes(POINT_BYTES).unwrap();
-        assert_eq!(cube, PgCube::Point(2.))
+        let cube = ClickHouseCube::from_bytes(POINT_BYTES).unwrap();
+        assert_eq!(cube, ClickHouseCube::Point(2.))
     }
 
     #[test]
     fn can_deserialise_point_type_str() {
-        let cube_1 = PgCube::from_str("(2)").unwrap();
-        assert_eq!(cube_1, PgCube::Point(2.));
-        let cube_2 = PgCube::from_str("2").unwrap();
-        assert_eq!(cube_2, PgCube::Point(2.));
+        let cube_1 = ClickHouseCube::from_str("(2)").unwrap();
+        assert_eq!(cube_1, ClickHouseCube::Point(2.));
+        let cube_2 = ClickHouseCube::from_str("2").unwrap();
+        assert_eq!(cube_2, ClickHouseCube::Point(2.));
     }
 
     #[test]
     fn can_serialise_point_type() {
-        assert_eq!(PgCube::Point(2.).serialize_to_vec(), POINT_BYTES,)
+        assert_eq!(ClickHouseCube::Point(2.).serialize_to_vec(), POINT_BYTES,)
     }
     #[test]
     fn can_deserialise_zero_volume_bytes() {
-        let cube = PgCube::from_bytes(ZERO_VOLUME_BYTES).unwrap();
-        assert_eq!(cube, PgCube::ZeroVolume(vec![2., 3.]));
+        let cube = ClickHouseCube::from_bytes(ZERO_VOLUME_BYTES).unwrap();
+        assert_eq!(cube, ClickHouseCube::ZeroVolume(vec![2., 3.]));
     }
 
     #[test]
     fn can_deserialise_zero_volume_string() {
-        let cube_1 = PgCube::from_str("(2,3,4)").unwrap();
-        assert_eq!(cube_1, PgCube::ZeroVolume(vec![2., 3., 4.]));
-        let cube_2 = PgCube::from_str("2,3,4").unwrap();
-        assert_eq!(cube_2, PgCube::ZeroVolume(vec![2., 3., 4.]));
+        let cube_1 = ClickHouseCube::from_str("(2,3,4)").unwrap();
+        assert_eq!(cube_1, ClickHouseCube::ZeroVolume(vec![2., 3., 4.]));
+        let cube_2 = ClickHouseCube::from_str("2,3,4").unwrap();
+        assert_eq!(cube_2, ClickHouseCube::ZeroVolume(vec![2., 3., 4.]));
     }
 
     #[test]
     fn can_serialise_zero_volume() {
         assert_eq!(
-            PgCube::ZeroVolume(vec![2., 3.]).serialize_to_vec(),
+            ClickHouseCube::ZeroVolume(vec![2., 3.]).serialize_to_vec(),
             ZERO_VOLUME_BYTES
         );
     }
 
     #[test]
     fn can_deserialise_one_dimension_interval_bytes() {
-        let cube = PgCube::from_bytes(ONE_DIMENSIONAL_INTERVAL_BYTES).unwrap();
-        assert_eq!(cube, PgCube::OneDimensionInterval(7., 8.))
+        let cube = ClickHouseCube::from_bytes(ONE_DIMENSIONAL_INTERVAL_BYTES).unwrap();
+        assert_eq!(cube, ClickHouseCube::OneDimensionInterval(7., 8.))
     }
 
     #[test]
     fn can_deserialise_one_dimension_interval_string() {
-        let cube_1 = PgCube::from_str("((7),(8))").unwrap();
-        assert_eq!(cube_1, PgCube::OneDimensionInterval(7., 8.));
-        let cube_2 = PgCube::from_str("(7),(8)").unwrap();
-        assert_eq!(cube_2, PgCube::OneDimensionInterval(7., 8.));
+        let cube_1 = ClickHouseCube::from_str("((7),(8))").unwrap();
+        assert_eq!(cube_1, ClickHouseCube::OneDimensionInterval(7., 8.));
+        let cube_2 = ClickHouseCube::from_str("(7),(8)").unwrap();
+        assert_eq!(cube_2, ClickHouseCube::OneDimensionInterval(7., 8.));
     }
 
     #[test]
     fn can_serialise_one_dimension_interval() {
         assert_eq!(
-            PgCube::OneDimensionInterval(7., 8.).serialize_to_vec(),
+            ClickHouseCube::OneDimensionInterval(7., 8.).serialize_to_vec(),
             ONE_DIMENSIONAL_INTERVAL_BYTES
         )
     }
 
     #[test]
     fn can_deserialise_multi_dimension_2_dimension_byte() {
-        let cube = PgCube::from_bytes(MULTI_DIMENSION_2_DIM_BYTES).unwrap();
+        let cube = ClickHouseCube::from_bytes(MULTI_DIMENSION_2_DIM_BYTES).unwrap();
         assert_eq!(
             cube,
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
         )
     }
 
     #[test]
     fn can_deserialise_multi_dimension_2_dimension_string() {
-        let cube_1 = PgCube::from_str("((1,2),(3,4))").unwrap();
+        let cube_1 = ClickHouseCube::from_str("((1,2),(3,4))").unwrap();
         assert_eq!(
             cube_1,
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
         );
-        let cube_2 = PgCube::from_str("((1, 2), (3, 4))").unwrap();
+        let cube_2 = ClickHouseCube::from_str("((1, 2), (3, 4))").unwrap();
         assert_eq!(
             cube_2,
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
         );
-        let cube_3 = PgCube::from_str("(1,2),(3,4)").unwrap();
+        let cube_3 = ClickHouseCube::from_str("(1,2),(3,4)").unwrap();
         assert_eq!(
             cube_3,
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
         );
-        let cube_4 = PgCube::from_str("(1, 2), (3, 4)").unwrap();
+        let cube_4 = ClickHouseCube::from_str("(1, 2), (3, 4)").unwrap();
         assert_eq!(
             cube_4,
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]])
         )
     }
 
     #[test]
     fn can_serialise_multi_dimension_2_dimension() {
         assert_eq!(
-            PgCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]]).serialize_to_vec(),
+            ClickHouseCube::MultiDimension(vec![vec![1., 2.], vec![3., 4.]]).serialize_to_vec(),
             MULTI_DIMENSION_2_DIM_BYTES
         )
     }
 
     #[test]
     fn can_deserialise_multi_dimension_3_dimension_bytes() {
-        let cube = PgCube::from_bytes(MULTI_DIMENSION_3_DIM_BYTES).unwrap();
+        let cube = ClickHouseCube::from_bytes(MULTI_DIMENSION_3_DIM_BYTES).unwrap();
         assert_eq!(
             cube,
-            PgCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
+            ClickHouseCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
         )
     }
 
     #[test]
     fn can_deserialise_multi_dimension_3_dimension_string() {
-        let cube = PgCube::from_str("((2,3,4),(5,6,7))").unwrap();
+        let cube = ClickHouseCube::from_str("((2,3,4),(5,6,7))").unwrap();
         assert_eq!(
             cube,
-            PgCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
+            ClickHouseCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
         );
-        let cube_2 = PgCube::from_str("(2,3,4),(5,6,7)").unwrap();
+        let cube_2 = ClickHouseCube::from_str("(2,3,4),(5,6,7)").unwrap();
         assert_eq!(
             cube_2,
-            PgCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
+            ClickHouseCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]])
         );
     }
 
     #[test]
     fn can_serialise_multi_dimension_3_dimension() {
         assert_eq!(
-            PgCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]]).serialize_to_vec(),
+            ClickHouseCube::MultiDimension(vec![vec![2., 3., 4.], vec![5., 6., 7.]]).serialize_to_vec(),
             MULTI_DIMENSION_3_DIM_BYTES
         )
     }

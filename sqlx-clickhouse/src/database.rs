@@ -1,40 +1,40 @@
-use crate::arguments::PgArgumentBuffer;
-use crate::value::{PgValue, PgValueRef};
+use crate::arguments::ClickHouseArgumentBuffer;
+use crate::value::{ClickHouseValue, ClickHouseValueRef};
 use crate::{
-    PgArguments, PgColumn, PgConnection, PgQueryResult, PgRow, PgStatement, PgTransactionManager,
-    PgTypeInfo,
+    ClickHouseArguments, ClickHouseColumn, ClickHouseConnection, ClickHouseQueryResult, ClickHouseRow, ClickHouseStatement, ClickHouseTransactionManager,
+    ClickHouseTypeInfo,
 };
 
 pub(crate) use sqlx_core::database::{Database, HasStatementCache};
 
-/// PostgreSQL database driver.
+/// ClickHouse database driver.
 #[derive(Debug)]
-pub struct Postgres;
+pub struct ClickHouse;
 
-impl Database for Postgres {
-    type Connection = PgConnection;
+impl Database for ClickHouse {
+    type Connection = ClickHouseConnection;
 
-    type TransactionManager = PgTransactionManager;
+    type TransactionManager = ClickHouseTransactionManager;
 
-    type Row = PgRow;
+    type Row = ClickHouseRow;
 
-    type QueryResult = PgQueryResult;
+    type QueryResult = ClickHouseQueryResult;
 
-    type Column = PgColumn;
+    type Column = ClickHouseColumn;
 
-    type TypeInfo = PgTypeInfo;
+    type TypeInfo = ClickHouseTypeInfo;
 
-    type Value = PgValue;
-    type ValueRef<'r> = PgValueRef<'r>;
+    type Value = ClickHouseValue;
+    type ValueRef<'r> = ClickHouseValueRef<'r>;
 
-    type Arguments<'q> = PgArguments;
-    type ArgumentBuffer<'q> = PgArgumentBuffer;
+    type Arguments<'q> = ClickHouseArguments;
+    type ArgumentBuffer<'q> = ClickHouseArgumentBuffer;
 
-    type Statement<'q> = PgStatement<'q>;
+    type Statement<'q> = ClickHouseStatement<'q>;
 
-    const NAME: &'static str = "PostgreSQL";
+    const NAME: &'static str = "ClickHouse";
 
     const URL_SCHEMES: &'static [&'static str] = &["postgres", "postgresql"];
 }
 
-impl HasStatementCache for Postgres {}
+impl HasStatementCache for ClickHouse {}

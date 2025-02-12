@@ -6,7 +6,7 @@ use futures_core::stream::BoxStream;
 
 use sqlx_core::bytes::{BufMut, Bytes};
 
-use crate::connection::PgConnection;
+use crate::connection::ClickHouseConnection;
 use crate::error::{Error, Result};
 use crate::ext::async_stream::TryAsyncStream;
 use crate::io::AsyncRead;
@@ -15,11 +15,11 @@ use crate::message::{
     CopyOutResponse, CopyResponseData, Query, ReadyForQuery,
 };
 use crate::pool::{Pool, PoolConnection};
-use crate::Postgres;
+use crate::ClickHouse;
 
-impl PgConnection {
+impl ClickHouseConnection {
     /// Issue a `COPY FROM STDIN` statement and transition the connection to streaming data
-    /// to Postgres. This is a more efficient way to import data into Postgres as compared to
+    /// to ClickHouse. This is a more efficient way to import data into ClickHouse as compared to
     /// `INSERT` but requires one of a few specific data formats (text/CSV/binary).
     ///
     /// If `statement` is anything other than a `COPY ... FROM STDIN ...` command, an error is
@@ -29,14 +29,14 @@ impl PgConnection {
     /// <https://www.postgresql.org/docs/current/sql-copy.html>
     ///
     /// ### Note
-    /// [PgCopyIn::finish] or [PgCopyIn::abort] *must* be called when finished or the connection
+    /// [ClickHouseCopyIn::finish] or [ClickHouseCopyIn::abort] *must* be called when finished or the connection
     /// will return an error the next time it is used.
-    pub async fn copy_in_raw(&mut self, statement: &str) -> Result<PgCopyIn<&mut Self>> {
-        PgCopyIn::begin(self, statement).await
+    pub async fn copy_in_raw(&mut self, statement: &str) -> Result<ClickHouseCopyIn<&mut Self>> {
+        ClickHouseCopyIn::begin(self, statement).await
     }
 
     /// Issue a `COPY TO STDOUT` statement and transition the connection to streaming data
-    /// from Postgres. This is a more efficient way to export data from Postgres but
+    /// from ClickHouse. This is a more efficient way to export data from ClickHouse but
     /// arrives in chunks of one of a few data formats (text/CSV/binary).
     ///
     /// If `statement` is anything other than a `COPY ... TO STDOUT ...` command,
@@ -63,13 +63,13 @@ impl PgConnection {
     }
 }
 
-/// Implements methods for directly executing `COPY FROM/TO STDOUT` on a [`PgPool`][crate::PgPool].
+/// Implements methods for directly executing `COPY FROM/TO STDOUT` on a [`ClickHousePool`][crate::ClickHousePool].
 ///
-/// This is a replacement for the inherent methods on `PgPool` which could not exist
-/// once the Postgres driver was moved out into its own crate.
-pub trait PgPoolCopyExt {
-    /// Issue a `COPY FROM STDIN` statement and begin streaming data to Postgres.
-    /// This is a more efficient way to import data into Postgres as compared to
+/// This is a replacement for the inherent methods on `ClickHousePool` which could not exist
+/// once the ClickHouse driver was moved out into its own crate.
+pub trait ClickHousePoolCopyExt {
+    /// Issue a `COPY FROM STDIN` statement and begin streaming data to ClickHouse.
+    /// This is a more efficient way to import data into ClickHouse as compared to
     /// `INSERT` but requires one of a few specific data formats (text/CSV/binary).
     ///
     /// A single connection will be checked out for the duration.
@@ -81,15 +81,15 @@ pub trait PgPoolCopyExt {
     /// <https://www.postgresql.org/docs/current/sql-copy.html>
     ///
     /// ### Note
-    /// [PgCopyIn::finish] or [PgCopyIn::abort] *must* be called when finished or the connection
+    /// [ClickHouseCopyIn::finish] or [ClickHouseCopyIn::abort] *must* be called when finished or the connection
     /// will return an error the next time it is used.
     fn copy_in_raw<'a>(
         &'a self,
         statement: &'a str,
-    ) -> BoxFuture<'a, Result<PgCopyIn<PoolConnection<Postgres>>>>;
+    ) -> BoxFuture<'a, Result<ClickHouseCopyIn<PoolConnection<ClickHouse>>>>;
 
     /// Issue a `COPY TO STDOUT` statement and begin streaming data
-    /// from Postgres. This is a more efficient way to export data from Postgres but
+    /// from ClickHouse. This is a more efficient way to export data from ClickHouse but
     /// arrives in chunks of one of a few data formats (text/CSV/binary).
     ///
     /// If `statement` is anything other than a `COPY ... TO STDOUT ...` command,
@@ -113,12 +113,12 @@ pub trait PgPoolCopyExt {
     ) -> BoxFuture<'a, Result<BoxStream<'static, Result<Bytes>>>>;
 }
 
-impl PgPoolCopyExt for Pool<Postgres> {
+impl ClickHousePoolCopyExt for Pool<ClickHouse> {
     fn copy_in_raw<'a>(
         &'a self,
         statement: &'a str,
-    ) -> BoxFuture<'a, Result<PgCopyIn<PoolConnection<Postgres>>>> {
-        Box::pin(async { PgCopyIn::begin(self.acquire().await?, statement).await })
+    ) -> BoxFuture<'a, Result<ClickHouseCopyIn<PoolConnection<ClickHouse>>>> {
+        Box::pin(async { ClickHouseCopyIn::begin(self.acquire().await?, statement).await })
     }
 
     fn copy_out_raw<'a>(
@@ -134,18 +134,18 @@ pub const PG_COPY_MAX_DATA_LEN: usize = 0x3fffffff - 1 - 4;
 
 /// A connection in streaming `COPY FROM STDIN` mode.
 ///
-/// Created by [PgConnection::copy_in_raw] or [Pool::copy_out_raw].
+/// Created by [ClickHouseConnection::copy_in_raw] or [Pool::copy_out_raw].
 ///
 /// ### Note
-/// [PgCopyIn::finish] or [PgCopyIn::abort] *must* be called when finished or the connection
+/// [ClickHouseCopyIn::finish] or [ClickHouseCopyIn::abort] *must* be called when finished or the connection
 /// will return an error the next time it is used.
 #[must_use = "connection will error on next use if `.finish()` or `.abort()` is not called"]
-pub struct PgCopyIn<C: DerefMut<Target = PgConnection>> {
+pub struct ClickHouseCopyIn<C: DerefMut<Target = ClickHouseConnection>> {
     conn: Option<C>,
     response: CopyResponseData,
 }
 
-impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
+impl<C: DerefMut<Target = ClickHouseConnection>> ClickHouseCopyIn<C> {
     async fn begin(mut conn: C, statement: &str) -> Result<Self> {
         conn.wait_until_ready().await?;
         conn.inner.stream.send(Query(statement)).await?;
@@ -158,13 +158,13 @@ impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
             }
         };
 
-        Ok(PgCopyIn {
+        Ok(ClickHouseCopyIn {
             conn: Some(conn),
             response,
         })
     }
 
-    /// Returns `true` if Postgres is expecting data in text or CSV format.
+    /// Returns `true` if ClickHouse is expecting data in text or CSV format.
     pub fn is_textual(&self) -> bool {
         self.response.format == 0
     }
@@ -222,7 +222,7 @@ impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
     /// If both `runtime-async-std` and `runtime-tokio` features are enabled, the Tokio version
     /// takes precedent.
     pub async fn read_from(&mut self, mut source: impl AsyncRead + Unpin) -> Result<&mut Self> {
-        let conn: &mut PgConnection = self.conn.as_deref_mut().expect("copy_from: conn taken");
+        let conn: &mut ClickHouseConnection = self.conn.as_deref_mut().expect("copy_from: conn taken");
         loop {
             let buf = conn.inner.stream.write_buffer_mut();
 
@@ -258,7 +258,7 @@ impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
         let mut conn = self
             .conn
             .take()
-            .expect("PgCopyIn::fail_with: conn taken illegally");
+            .expect("ClickHouseCopyIn::fail_with: conn taken illegally");
 
         conn.inner.stream.send(CopyFail::new(msg)).await?;
 
@@ -305,20 +305,20 @@ impl<C: DerefMut<Target = PgConnection>> PgCopyIn<C> {
     }
 }
 
-impl<C: DerefMut<Target = PgConnection>> Drop for PgCopyIn<C> {
+impl<C: DerefMut<Target = ClickHouseConnection>> Drop for ClickHouseCopyIn<C> {
     fn drop(&mut self) {
         if let Some(mut conn) = self.conn.take() {
             conn.inner
                 .stream
                 .write_msg(CopyFail::new(
-                    "PgCopyIn dropped without calling finish() or fail()",
+                    "ClickHouseCopyIn dropped without calling finish() or fail()",
                 ))
-                .expect("BUG: PgCopyIn abort message should not be too large");
+                .expect("BUG: ClickHouseCopyIn abort message should not be too large");
         }
     }
 }
 
-async fn pg_begin_copy_out<'c, C: DerefMut<Target = PgConnection> + Send + 'c>(
+async fn pg_begin_copy_out<'c, C: DerefMut<Target = ClickHouseConnection> + Send + 'c>(
     mut conn: C,
     statement: &str,
 ) -> Result<BoxStream<'c, Result<Bytes>>> {

@@ -4,34 +4,34 @@ use crate::{
     encode::{Encode, IsNull},
     error::BoxDynError,
     types::Type,
-    PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres,
+    ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse,
 };
 use bit_vec::BitVec;
 use sqlx_core::bytes::Buf;
 use std::{io, mem};
 
-impl Type<Postgres> for BitVec {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::VARBIT
+impl Type<ClickHouse> for BitVec {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::VARBIT
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
-        *ty == PgTypeInfo::BIT || *ty == PgTypeInfo::VARBIT
-    }
-}
-
-impl PgHasArrayType for BitVec {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::VARBIT_ARRAY
-    }
-
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
-        *ty == PgTypeInfo::BIT_ARRAY || *ty == PgTypeInfo::VARBIT_ARRAY
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
+        *ty == ClickHouseTypeInfo::BIT || *ty == ClickHouseTypeInfo::VARBIT
     }
 }
 
-impl Encode<'_, Postgres> for BitVec {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl ClickHouseHasArrayType for BitVec {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::VARBIT_ARRAY
+    }
+
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
+        *ty == ClickHouseTypeInfo::BIT_ARRAY || *ty == ClickHouseTypeInfo::VARBIT_ARRAY
+    }
+}
+
+impl Encode<'_, ClickHouse> for BitVec {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         let len = value_size_int4_checked(self.len())?;
 
         buf.extend(len.to_be_bytes());
@@ -45,10 +45,10 @@ impl Encode<'_, Postgres> for BitVec {
     }
 }
 
-impl Decode<'_, Postgres> for BitVec {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for BitVec {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let mut bytes = value.as_bytes()?;
                 let len = bytes.get_i32();
 
@@ -75,7 +75,7 @@ impl Decode<'_, Postgres> for BitVec {
 
                 Ok(bitvec)
             }
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let s = value.as_str()?;
                 let mut bit_vec = BitVec::with_capacity(s.len());
 

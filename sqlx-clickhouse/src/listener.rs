@@ -16,17 +16,17 @@ use crate::executor::{Execute, Executor};
 use crate::message::{BackendMessageFormat, Notification};
 use crate::pool::PoolOptions;
 use crate::pool::{Pool, PoolConnection};
-use crate::{PgConnection, PgQueryResult, PgRow, PgStatement, PgTypeInfo, Postgres};
+use crate::{ClickHouseConnection, ClickHouseQueryResult, ClickHouseRow, ClickHouseStatement, ClickHouseTypeInfo, ClickHouse};
 
-/// A stream of asynchronous notifications from Postgres.
+/// A stream of asynchronous notifications from ClickHouse.
 ///
 /// This listener will auto-reconnect. If the active
 /// connection being used ever dies, this listener will detect that event, create a
 /// new connection, will re-subscribe to all of the originally specified channels, and will resume
 /// operations as normal.
-pub struct PgListener {
-    pool: Pool<Postgres>,
-    connection: Option<PoolConnection<Postgres>>,
+pub struct ClickHouseListener {
+    pool: Pool<ClickHouse>,
+    connection: Option<PoolConnection<ClickHouse>>,
     buffer_rx: mpsc::UnboundedReceiver<Notification>,
     buffer_tx: Option<mpsc::UnboundedSender<Notification>>,
     channels: Vec<String>,
@@ -34,14 +34,14 @@ pub struct PgListener {
     eager_reconnect: bool,
 }
 
-/// An asynchronous notification from Postgres.
-pub struct PgNotification(Notification);
+/// An asynchronous notification from ClickHouse.
+pub struct ClickHouseNotification(Notification);
 
-impl PgListener {
+impl ClickHouseListener {
     pub async fn connect(url: &str) -> Result<Self, Error> {
         // Create a pool of 1 without timeouts (as they don't apply here)
         // We only use the pool to handle re-connections
-        let pool = PoolOptions::<Postgres>::new()
+        let pool = PoolOptions::<ClickHouse>::new()
             .max_connections(1)
             .max_lifetime(None)
             .idle_timeout(None)
@@ -55,7 +55,7 @@ impl PgListener {
         Ok(this)
     }
 
-    pub async fn connect_with(pool: &Pool<Postgres>) -> Result<Self, Error> {
+    pub async fn connect_with(pool: &Pool<ClickHouse>) -> Result<Self, Error> {
         // Pull out an initial connection
         let mut connection = pool.acquire().await?;
 
@@ -83,16 +83,16 @@ impl PgListener {
     /// This is because `Pool::close()` will wait until _all_ connections are returned and closed,
     /// including the one being used by this listener.
     ///
-    /// Otherwise, `pool.close().await` would have to wait until `PgListener` encountered a
+    /// Otherwise, `pool.close().await` would have to wait until `ClickHouseListener` encountered a
     /// need to acquire a new connection (timeout, error, etc.) and dropped the one it was
     /// currently holding, at which point `.recv()` or `.try_recv()` would return `Err(PoolClosed)`
     /// on the attempt to acquire a new connection anyway.
     ///
-    /// However, if you want `PgListener` to ignore the close event and continue waiting for a
+    /// However, if you want `ClickHouseListener` to ignore the close event and continue waiting for a
     /// message as long as it can, set this to `true`.
     ///
-    /// Does nothing if this was constructed with [`PgListener::connect()`], as that creates an
-    /// internal pool just for the new instance of `PgListener` which cannot be closed manually.
+    /// Does nothing if this was constructed with [`ClickHouseListener::connect()`], as that creates an
+    /// internal pool just for the new instance of `ClickHouseListener` which cannot be closed manually.
     pub fn ignore_pool_close_event(&mut self, val: bool) {
         self.ignore_close_event = val;
     }
@@ -185,7 +185,7 @@ impl PgListener {
     }
 
     #[inline]
-    async fn connection(&mut self) -> Result<&mut PgConnection, Error> {
+    async fn connection(&mut self) -> Result<&mut ClickHouseConnection, Error> {
         // Ensure we have an active connection to work with.
         self.connect_if_needed().await?;
 
@@ -194,7 +194,7 @@ impl PgListener {
 
     /// Receives the next notification available from any of the subscribed channels.
     ///
-    /// If the connection to PostgreSQL is lost, it is automatically reconnected on the next
+    /// If the connection to ClickHouse is lost, it is automatically reconnected on the next
     /// call to `recv()`, and should be entirely transparent (as long as it was just an
     /// intermittent network failure or long-lived connection reaper).
     ///
@@ -205,10 +205,10 @@ impl PgListener {
     /// # Example
     ///
     /// ```rust,no_run
-    /// # use sqlx::postgres::PgListener;
+    /// # use sqlx::postgres::ClickHouseListener;
     /// #
     /// # sqlx::__rt::test_block_on(async move {
-    /// let mut listener = PgListener::connect("postgres:// ...").await?;
+    /// let mut listener = ClickHouseListener::connect("postgres:// ...").await?;
     /// loop {
     ///     // ask for next notification, re-connecting (transparently) if needed
     ///     let notification = listener.recv().await?;
@@ -218,7 +218,7 @@ impl PgListener {
     /// # Result::<(), sqlx::Error>::Ok(())
     /// # }).unwrap();
     /// ```
-    pub async fn recv(&mut self) -> Result<PgNotification, Error> {
+    pub async fn recv(&mut self) -> Result<ClickHouseNotification, Error> {
         loop {
             if let Some(notification) = self.try_recv().await? {
                 return Ok(notification);
@@ -228,17 +228,17 @@ impl PgListener {
 
     /// Receives the next notification available from any of the subscribed channels.
     ///
-    /// If the connection to PostgreSQL is lost, `None` is returned, and the connection is
+    /// If the connection to ClickHouse is lost, `None` is returned, and the connection is
     /// reconnected either immediately, or on the next call to `try_recv()`, depending on
     /// the value of [`eager_reconnect`].
     ///
     /// # Example
     ///
     /// ```rust,no_run
-    /// # use sqlx::postgres::PgListener;
+    /// # use sqlx::postgres::ClickHouseListener;
     /// #
     /// # sqlx::__rt::test_block_on(async move {
-    /// # let mut listener = PgListener::connect("postgres:// ...").await?;
+    /// # let mut listener = ClickHouseListener::connect("postgres:// ...").await?;
     /// loop {
     ///     // start handling notifications, connecting if needed
     ///     while let Some(notification) = listener.try_recv().await? {
@@ -251,8 +251,8 @@ impl PgListener {
     /// # }).unwrap();
     /// ```
     ///
-    /// [`eager_reconnect`]: PgListener::eager_reconnect
-    pub async fn try_recv(&mut self) -> Result<Option<PgNotification>, Error> {
+    /// [`eager_reconnect`]: ClickHouseListener::eager_reconnect
+    pub async fn try_recv(&mut self) -> Result<Option<ClickHouseNotification>, Error> {
         // Flush the buffer first, if anything
         // This would only fill up if this listener is used as a connection
         if let Some(notification) = self.next_buffered() {
@@ -311,7 +311,7 @@ impl PgListener {
             match message.format {
                 // We've received an async notification, return it.
                 BackendMessageFormat::NotificationResponse => {
-                    return Ok(Some(PgNotification(message.decode()?)));
+                    return Ok(Some(ClickHouseNotification(message.decode()?)));
                 }
 
                 // Mark the connection as ready for another query
@@ -330,9 +330,9 @@ impl PgListener {
     /// This is similar to `try_recv`, except it will not wait if the connection has not yet received a notification.
     ///
     /// This is helpful if you want to retrieve all buffered notifications and process them in batches.
-    pub fn next_buffered(&mut self) -> Option<PgNotification> {
+    pub fn next_buffered(&mut self) -> Option<ClickHouseNotification> {
         if let Ok(Some(notification)) = self.buffer_rx.try_next() {
-            Some(PgNotification(notification))
+            Some(ClickHouseNotification(notification))
         } else {
             None
         }
@@ -342,9 +342,9 @@ impl PgListener {
     ///
     /// The backing connection will be automatically reconnected should it be lost.
     ///
-    /// This has the same potential drawbacks as [`recv`](PgListener::recv).
+    /// This has the same potential drawbacks as [`recv`](ClickHouseListener::recv).
     ///
-    pub fn into_stream(mut self) -> impl Stream<Item = Result<PgNotification, Error>> + Unpin {
+    pub fn into_stream(mut self) -> impl Stream<Item = Result<ClickHouseNotification, Error>> + Unpin {
         Box::pin(try_stream! {
             loop {
                 r#yield!(self.recv().await?);
@@ -353,7 +353,7 @@ impl PgListener {
     }
 }
 
-impl Drop for PgListener {
+impl Drop for ClickHouseListener {
     fn drop(&mut self) {
         if let Some(mut conn) = self.connection.take() {
             let fut = async move {
@@ -371,9 +371,9 @@ impl Drop for PgListener {
     }
 }
 
-impl<'c> Acquire<'c> for &'c mut PgListener {
-    type Database = Postgres;
-    type Connection = &'c mut PgConnection;
+impl<'c> Acquire<'c> for &'c mut ClickHouseListener {
+    type Database = ClickHouse;
+    type Connection = &'c mut ClickHouseConnection;
 
     fn acquire(self) -> BoxFuture<'c, Result<Self::Connection, Error>> {
         self.connection().boxed()
@@ -384,13 +384,13 @@ impl<'c> Acquire<'c> for &'c mut PgListener {
     }
 }
 
-impl<'c> Executor<'c> for &'c mut PgListener {
-    type Database = Postgres;
+impl<'c> Executor<'c> for &'c mut ClickHouseListener {
+    type Database = ClickHouse;
 
     fn fetch_many<'e, 'q, E>(
         self,
         query: E,
-    ) -> BoxStream<'e, Result<Either<PgQueryResult, PgRow>, Error>>
+    ) -> BoxStream<'e, Result<Either<ClickHouseQueryResult, ClickHouseRow>, Error>>
     where
         'c: 'e,
         E: Execute<'q, Self::Database>,
@@ -406,7 +406,7 @@ impl<'c> Executor<'c> for &'c mut PgListener {
         .boxed()
     }
 
-    fn fetch_optional<'e, 'q, E>(self, query: E) -> BoxFuture<'e, Result<Option<PgRow>, Error>>
+    fn fetch_optional<'e, 'q, E>(self, query: E) -> BoxFuture<'e, Result<Option<ClickHouseRow>, Error>>
     where
         'c: 'e,
         E: Execute<'q, Self::Database>,
@@ -419,8 +419,8 @@ impl<'c> Executor<'c> for &'c mut PgListener {
     fn prepare_with<'e, 'q: 'e>(
         self,
         query: &'q str,
-        parameters: &'e [PgTypeInfo],
-    ) -> BoxFuture<'e, Result<PgStatement<'q>, Error>>
+        parameters: &'e [ClickHouseTypeInfo],
+    ) -> BoxFuture<'e, Result<ClickHouseStatement<'q>, Error>>
     where
         'c: 'e,
     {
@@ -445,7 +445,7 @@ impl<'c> Executor<'c> for &'c mut PgListener {
     }
 }
 
-impl PgNotification {
+impl ClickHouseNotification {
     /// The process ID of the notifying backend process.
     #[inline]
     pub fn process_id(&self) -> u32 {
@@ -467,15 +467,15 @@ impl PgNotification {
     }
 }
 
-impl Debug for PgListener {
+impl Debug for ClickHouseListener {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PgListener").finish()
+        f.debug_struct("ClickHouseListener").finish()
     }
 }
 
-impl Debug for PgNotification {
+impl Debug for ClickHouseNotification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PgNotification")
+        f.debug_struct("ClickHouseNotification")
             .field("process_id", &self.process_id())
             .field("channel", &self.channel())
             .field("payload", &self.payload())

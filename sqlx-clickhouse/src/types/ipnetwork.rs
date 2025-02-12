@@ -6,7 +6,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
 // https://github.com/postgres/postgres/blob/574925bfd0a8175f6e161936ea11d9695677ba09/src/include/utils/inet.h#L39
 
@@ -15,28 +15,28 @@ use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValue
 const PGSQL_AF_INET: u8 = 2; // AF_INET
 const PGSQL_AF_INET6: u8 = PGSQL_AF_INET + 1;
 
-impl Type<Postgres> for IpNetwork {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INET
+impl Type<ClickHouse> for IpNetwork {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INET
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
-        *ty == PgTypeInfo::CIDR || *ty == PgTypeInfo::INET
-    }
-}
-
-impl PgHasArrayType for IpNetwork {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INET_ARRAY
-    }
-
-    fn array_compatible(ty: &PgTypeInfo) -> bool {
-        *ty == PgTypeInfo::CIDR_ARRAY || *ty == PgTypeInfo::INET_ARRAY
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
+        *ty == ClickHouseTypeInfo::CIDR || *ty == ClickHouseTypeInfo::INET
     }
 }
 
-impl Encode<'_, Postgres> for IpNetwork {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl ClickHouseHasArrayType for IpNetwork {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INET_ARRAY
+    }
+
+    fn array_compatible(ty: &ClickHouseTypeInfo) -> bool {
+        *ty == ClickHouseTypeInfo::CIDR_ARRAY || *ty == ClickHouseTypeInfo::INET_ARRAY
+    }
+}
+
+impl Encode<'_, ClickHouse> for IpNetwork {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         // https://github.com/postgres/postgres/blob/574925bfd0a8175f6e161936ea11d9695677ba09/src/backend/utils/adt/network.c#L293
         // https://github.com/postgres/postgres/blob/574925bfd0a8175f6e161936ea11d9695677ba09/src/backend/utils/adt/network.c#L271
 
@@ -69,11 +69,11 @@ impl Encode<'_, Postgres> for IpNetwork {
     }
 }
 
-impl Decode<'_, Postgres> for IpNetwork {
-    fn decode(value: PgValueRef<'_>) -> Result<Self, BoxDynError> {
+impl Decode<'_, ClickHouse> for IpNetwork {
+    fn decode(value: ClickHouseValueRef<'_>) -> Result<Self, BoxDynError> {
         let bytes = match value.format() {
-            PgValueFormat::Binary => value.as_bytes()?,
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Binary => value.as_bytes()?,
+            ClickHouseValueFormat::Text => {
                 return Ok(value.as_str()?.parse()?);
             }
         };

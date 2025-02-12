@@ -3,17 +3,17 @@ use futures_core::future::BoxFuture;
 use crate::error::Error;
 use crate::executor::Executor;
 
-use crate::{PgConnection, Postgres};
+use crate::{ClickHouseConnection, ClickHouse};
 
 pub(crate) use sqlx_core::transaction::*;
 
-/// Implementation of [`TransactionManager`] for PostgreSQL.
-pub struct PgTransactionManager;
+/// Implementation of [`TransactionManager`] for ClickHouse.
+pub struct ClickHouseTransactionManager;
 
-impl TransactionManager for PgTransactionManager {
-    type Database = Postgres;
+impl TransactionManager for ClickHouseTransactionManager {
+    type Database = ClickHouse;
 
-    fn begin(conn: &mut PgConnection) -> BoxFuture<'_, Result<(), Error>> {
+    fn begin(conn: &mut ClickHouseConnection) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             let rollback = Rollback::new(conn);
             let query = begin_ansi_transaction_sql(rollback.conn.inner.transaction_depth);
@@ -26,7 +26,7 @@ impl TransactionManager for PgTransactionManager {
         })
     }
 
-    fn commit(conn: &mut PgConnection) -> BoxFuture<'_, Result<(), Error>> {
+    fn commit(conn: &mut ClickHouseConnection) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             if conn.inner.transaction_depth > 0 {
                 conn.execute(&*commit_ansi_transaction_sql(conn.inner.transaction_depth))
@@ -39,7 +39,7 @@ impl TransactionManager for PgTransactionManager {
         })
     }
 
-    fn rollback(conn: &mut PgConnection) -> BoxFuture<'_, Result<(), Error>> {
+    fn rollback(conn: &mut ClickHouseConnection) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             if conn.inner.transaction_depth > 0 {
                 conn.execute(&*rollback_ansi_transaction_sql(
@@ -54,7 +54,7 @@ impl TransactionManager for PgTransactionManager {
         })
     }
 
-    fn start_rollback(conn: &mut PgConnection) {
+    fn start_rollback(conn: &mut ClickHouseConnection) {
         if conn.inner.transaction_depth > 0 {
             conn.queue_simple_query(&rollback_ansi_transaction_sql(conn.inner.transaction_depth))
                 .expect("BUG: Rollback query somehow too large for protocol");
@@ -65,20 +65,20 @@ impl TransactionManager for PgTransactionManager {
 }
 
 struct Rollback<'c> {
-    conn: &'c mut PgConnection,
+    conn: &'c mut ClickHouseConnection,
     defuse: bool,
 }
 
 impl Drop for Rollback<'_> {
     fn drop(&mut self) {
         if !self.defuse {
-            PgTransactionManager::start_rollback(self.conn)
+            ClickHouseTransactionManager::start_rollback(self.conn)
         }
     }
 }
 
 impl<'c> Rollback<'c> {
-    fn new(conn: &'c mut PgConnection) -> Self {
+    fn new(conn: &'c mut ClickHouseConnection) -> Self {
         Self {
             conn,
             defuse: false,

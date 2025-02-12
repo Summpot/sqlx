@@ -2,19 +2,19 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use bitflags::bitflags;
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
 use std::ops::Deref;
 use std::str::FromStr;
 
-use crate::types::ltree::{PgLTreeLabel, PgLTreeParseError};
+use crate::types::ltree::{ClickHouseLTreeLabel, ClickHouseLTreeParseError};
 
 /// Represents lquery specific errors
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum PgLQueryParseError {
+pub enum ClickHouseLQueryParseError {
     #[error("lquery cannot be empty")]
     EmptyString,
     #[error("unexpected character in lquery")]
@@ -22,55 +22,55 @@ pub enum PgLQueryParseError {
     #[error("error parsing integer: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error("error parsing integer: {0}")]
-    LTreeParrseError(#[from] PgLTreeParseError),
+    LTreeParrseError(#[from] ClickHouseLTreeParseError),
     /// LQuery version not supported
     #[error("lquery version not supported")]
     InvalidLqueryVersion,
 }
 
-/// Container for a Label Tree Query (`lquery`) in Postgres.
+/// Container for a Label Tree Query (`lquery`) in ClickHouse.
 ///
 /// See <https://www.postgresql.org/docs/current/ltree.html>
 ///
-/// ### Note: Requires Postgres 13+
+/// ### Note: Requires ClickHouse 13+
 ///
-/// This integration requires that the `lquery` type support the binary format in the Postgres
-/// wire protocol, which only became available in Postgres 13.
-/// ([Postgres 13.0 Release Notes, Additional Modules](https://www.postgresql.org/docs/13/release-13.html#id-1.11.6.11.5.14))
+/// This integration requires that the `lquery` type support the binary format in the ClickHouse
+/// wire protocol, which only became available in ClickHouse 13.
+/// ([ClickHouse 13.0 Release Notes, Additional Modules](https://www.postgresql.org/docs/13/release-13.html#id-1.11.6.11.5.14))
 ///
-/// Ideally, SQLx's Postgres driver should support falling back to text format for types
+/// Ideally, SQLx's ClickHouse driver should support falling back to text format for types
 /// which don't have `typsend` and `typrecv` entries in `pg_type`, but that work still needs
 /// to be done.
 ///
 /// ### Note: Extension Required
-/// The `ltree` extension is not enabled by default in Postgres. You will need to do so explicitly:
+/// The `ltree` extension is not enabled by default in ClickHouse. You will need to do so explicitly:
 ///
 /// ```ignore
 /// CREATE EXTENSION IF NOT EXISTS "ltree";
 /// ```
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PgLQuery {
-    levels: Vec<PgLQueryLevel>,
+pub struct ClickHouseLQuery {
+    levels: Vec<ClickHouseLQueryLevel>,
 }
 
 // TODO: maybe a QueryBuilder pattern would be nice here
-impl PgLQuery {
+impl ClickHouseLQuery {
     /// creates default/empty lquery
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn from(levels: Vec<PgLQueryLevel>) -> Self {
+    pub fn from(levels: Vec<ClickHouseLQueryLevel>) -> Self {
         Self { levels }
     }
 
     /// push a query level
-    pub fn push(&mut self, level: PgLQueryLevel) {
+    pub fn push(&mut self, level: ClickHouseLQueryLevel) {
         self.levels.push(level);
     }
 
     /// pop a query level
-    pub fn pop(&mut self) -> Option<PgLQueryLevel> {
+    pub fn pop(&mut self) -> Option<ClickHouseLQueryLevel> {
         self.levels.pop()
     }
 
@@ -78,41 +78,41 @@ impl PgLQuery {
     // TODO: this should just be removed but I didn't want to bury it in a massive diff
     #[deprecated = "renamed to `try_from_iter()`"]
     #[allow(clippy::should_implement_trait)]
-    pub fn from_iter<I, S>(levels: I) -> Result<Self, PgLQueryParseError>
+    pub fn from_iter<I, S>(levels: I) -> Result<Self, ClickHouseLQueryParseError>
     where
         S: Into<String>,
         I: IntoIterator<Item = S>,
     {
         let mut lquery = Self::default();
         for level in levels {
-            lquery.push(PgLQueryLevel::from_str(&level.into())?);
+            lquery.push(ClickHouseLQueryLevel::from_str(&level.into())?);
         }
         Ok(lquery)
     }
 
     /// Create an `LQUERY` from an iterator of label strings.
     ///
-    /// Returns an error if any label fails to parse according to [`PgLQueryLevel::from_str()`].
-    pub fn try_from_iter<I, S>(levels: I) -> Result<Self, PgLQueryParseError>
+    /// Returns an error if any label fails to parse according to [`ClickHouseLQueryLevel::from_str()`].
+    pub fn try_from_iter<I, S>(levels: I) -> Result<Self, ClickHouseLQueryParseError>
     where
         S: AsRef<str>,
         I: IntoIterator<Item = S>,
     {
         levels
             .into_iter()
-            .map(|level| level.as_ref().parse::<PgLQueryLevel>())
+            .map(|level| level.as_ref().parse::<ClickHouseLQueryLevel>())
             .collect()
     }
 }
 
-impl FromIterator<PgLQueryLevel> for PgLQuery {
-    fn from_iter<T: IntoIterator<Item = PgLQueryLevel>>(iter: T) -> Self {
+impl FromIterator<ClickHouseLQueryLevel> for ClickHouseLQuery {
+    fn from_iter<T: IntoIterator<Item = ClickHouseLQueryLevel>>(iter: T) -> Self {
         Self::from(iter.into_iter().collect())
     }
 }
 
-impl IntoIterator for PgLQuery {
-    type Item = PgLQueryLevel;
+impl IntoIterator for ClickHouseLQuery {
+    type Item = ClickHouseLQueryLevel;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -120,20 +120,20 @@ impl IntoIterator for PgLQuery {
     }
 }
 
-impl FromStr for PgLQuery {
-    type Err = PgLQueryParseError;
+impl FromStr for ClickHouseLQuery {
+    type Err = ClickHouseLQueryParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
             levels: s
                 .split('.')
-                .map(PgLQueryLevel::from_str)
+                .map(ClickHouseLQueryLevel::from_str)
                 .collect::<Result<_, Self::Err>>()?,
         })
     }
 }
 
-impl Display for PgLQuery {
+impl Display for ClickHouseLQuery {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut iter = self.levels.iter();
         if let Some(label) = iter.next() {
@@ -146,29 +146,29 @@ impl Display for PgLQuery {
     }
 }
 
-impl Deref for PgLQuery {
-    type Target = [PgLQueryLevel];
+impl Deref for ClickHouseLQuery {
+    type Target = [ClickHouseLQueryLevel];
 
     fn deref(&self) -> &Self::Target {
         &self.levels
     }
 }
 
-impl Type<Postgres> for PgLQuery {
-    fn type_info() -> PgTypeInfo {
+impl Type<ClickHouse> for ClickHouseLQuery {
+    fn type_info() -> ClickHouseTypeInfo {
         // Since `ltree` is enabled by an extension, it does not have a stable OID.
-        PgTypeInfo::with_name("lquery")
+        ClickHouseTypeInfo::with_name("lquery")
     }
 }
 
-impl PgHasArrayType for PgLQuery {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_lquery")
+impl ClickHouseHasArrayType for ClickHouseLQuery {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_lquery")
     }
 }
 
-impl Encode<'_, Postgres> for PgLQuery {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for ClickHouseLQuery {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         buf.extend(1i8.to_le_bytes());
         write!(buf, "{self}")?;
 
@@ -176,18 +176,18 @@ impl Encode<'_, Postgres> for PgLQuery {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgLQuery {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseLQuery {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 let version = i8::from_le_bytes([bytes[0]; 1]);
                 if version != 1 {
-                    return Err(Box::new(PgLQueryParseError::InvalidLqueryVersion));
+                    return Err(Box::new(ClickHouseLQueryParseError::InvalidLqueryVersion));
                 }
                 Ok(Self::from_str(std::str::from_utf8(&bytes[1..])?)?)
             }
-            PgValueFormat::Text => Ok(Self::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Text => Ok(Self::from_str(value.as_str()?)?),
         }
     }
 }
@@ -195,7 +195,7 @@ impl<'r> Decode<'r, Postgres> for PgLQuery {
 bitflags! {
     /// Modifiers that can be set to non-star labels
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct PgLQueryVariantFlag: u16 {
+    pub struct ClickHouseLQueryVariantFlag: u16 {
         /// * - Match any label with this prefix, for example foo* matches foobar
         const ANY_END = 0x01;
         /// @ - Match case-insensitively, for example a@ matches A
@@ -205,15 +205,15 @@ bitflags! {
     }
 }
 
-impl Display for PgLQueryVariantFlag {
+impl Display for ClickHouseLQueryVariantFlag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.contains(PgLQueryVariantFlag::ANY_END) {
+        if self.contains(ClickHouseLQueryVariantFlag::ANY_END) {
             write!(f, "*")?;
         }
-        if self.contains(PgLQueryVariantFlag::IN_CASE) {
+        if self.contains(ClickHouseLQueryVariantFlag::IN_CASE) {
             write!(f, "@")?;
         }
-        if self.contains(PgLQueryVariantFlag::SUBLEXEME) {
+        if self.contains(ClickHouseLQueryVariantFlag::SUBLEXEME) {
             write!(f, "%")?;
         }
 
@@ -222,34 +222,34 @@ impl Display for PgLQueryVariantFlag {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PgLQueryVariant {
-    label: PgLTreeLabel,
-    modifiers: PgLQueryVariantFlag,
+pub struct ClickHouseLQueryVariant {
+    label: ClickHouseLTreeLabel,
+    modifiers: ClickHouseLQueryVariantFlag,
 }
 
-impl Display for PgLQueryVariant {
+impl Display for ClickHouseLQueryVariant {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", self.label, self.modifiers)
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum PgLQueryLevel {
+pub enum ClickHouseLQueryLevel {
     /// match any label (*) with optional at least / at most numbers
     Star(Option<u16>, Option<u16>),
     /// match any of specified labels with optional flags
-    NonStar(Vec<PgLQueryVariant>),
+    NonStar(Vec<ClickHouseLQueryVariant>),
     /// match none of specified labels with optional flags
-    NotNonStar(Vec<PgLQueryVariant>),
+    NotNonStar(Vec<ClickHouseLQueryVariant>),
 }
 
-impl FromStr for PgLQueryLevel {
-    type Err = PgLQueryParseError;
+impl FromStr for ClickHouseLQueryLevel {
+    type Err = ClickHouseLQueryParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = s.as_bytes();
         if bytes.is_empty() {
-            Err(PgLQueryParseError::EmptyString)
+            Err(ClickHouseLQueryParseError::EmptyString)
         } else {
             match bytes[0] {
                 b'*' => {
@@ -258,59 +258,59 @@ impl FromStr for PgLQueryLevel {
                         match parts.len() {
                             1 => {
                                 let number = parts[0].parse()?;
-                                Ok(PgLQueryLevel::Star(Some(number), Some(number)))
+                                Ok(ClickHouseLQueryLevel::Star(Some(number), Some(number)))
                             }
-                            2 => Ok(PgLQueryLevel::Star(
+                            2 => Ok(ClickHouseLQueryLevel::Star(
                                 Some(parts[0].parse()?),
                                 Some(parts[1].parse()?),
                             )),
-                            _ => Err(PgLQueryParseError::UnexpectedCharacter),
+                            _ => Err(ClickHouseLQueryParseError::UnexpectedCharacter),
                         }
                     } else {
-                        Ok(PgLQueryLevel::Star(None, None))
+                        Ok(ClickHouseLQueryLevel::Star(None, None))
                     }
                 }
-                b'!' => Ok(PgLQueryLevel::NotNonStar(
+                b'!' => Ok(ClickHouseLQueryLevel::NotNonStar(
                     s[1..]
                         .split('|')
-                        .map(PgLQueryVariant::from_str)
-                        .collect::<Result<Vec<_>, PgLQueryParseError>>()?,
+                        .map(ClickHouseLQueryVariant::from_str)
+                        .collect::<Result<Vec<_>, ClickHouseLQueryParseError>>()?,
                 )),
-                _ => Ok(PgLQueryLevel::NonStar(
+                _ => Ok(ClickHouseLQueryLevel::NonStar(
                     s.split('|')
-                        .map(PgLQueryVariant::from_str)
-                        .collect::<Result<Vec<_>, PgLQueryParseError>>()?,
+                        .map(ClickHouseLQueryVariant::from_str)
+                        .collect::<Result<Vec<_>, ClickHouseLQueryParseError>>()?,
                 )),
             }
         }
     }
 }
 
-impl FromStr for PgLQueryVariant {
-    type Err = PgLQueryParseError;
+impl FromStr for ClickHouseLQueryVariant {
+    type Err = ClickHouseLQueryParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut label_length = s.len();
-        let mut modifiers = PgLQueryVariantFlag::empty();
+        let mut modifiers = ClickHouseLQueryVariantFlag::empty();
 
         for b in s.bytes().rev() {
             match b {
-                b'@' => modifiers.insert(PgLQueryVariantFlag::IN_CASE),
-                b'*' => modifiers.insert(PgLQueryVariantFlag::ANY_END),
-                b'%' => modifiers.insert(PgLQueryVariantFlag::SUBLEXEME),
+                b'@' => modifiers.insert(ClickHouseLQueryVariantFlag::IN_CASE),
+                b'*' => modifiers.insert(ClickHouseLQueryVariantFlag::ANY_END),
+                b'%' => modifiers.insert(ClickHouseLQueryVariantFlag::SUBLEXEME),
                 _ => break,
             }
             label_length -= 1;
         }
 
-        Ok(PgLQueryVariant {
-            label: PgLTreeLabel::new(&s[0..label_length])?,
+        Ok(ClickHouseLQueryVariant {
+            label: ClickHouseLTreeLabel::new(&s[0..label_length])?,
             modifiers,
         })
     }
 }
 
-fn write_variants(f: &mut Formatter<'_>, variants: &[PgLQueryVariant], not: bool) -> fmt::Result {
+fn write_variants(f: &mut Formatter<'_>, variants: &[ClickHouseLQueryVariant], not: bool) -> fmt::Result {
     let mut iter = variants.iter();
     if let Some(variant) = iter.next() {
         write!(f, "{}{}", if not { "!" } else { "" }, variant)?;
@@ -321,21 +321,21 @@ fn write_variants(f: &mut Formatter<'_>, variants: &[PgLQueryVariant], not: bool
     Ok(())
 }
 
-impl Display for PgLQueryLevel {
+impl Display for ClickHouseLQueryLevel {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            PgLQueryLevel::Star(Some(at_least), Some(at_most)) => {
+            ClickHouseLQueryLevel::Star(Some(at_least), Some(at_most)) => {
                 if at_least == at_most {
                     write!(f, "*{{{at_least}}}")
                 } else {
                     write!(f, "*{{{at_least},{at_most}}}")
                 }
             }
-            PgLQueryLevel::Star(Some(at_least), _) => write!(f, "*{{{at_least},}}"),
-            PgLQueryLevel::Star(_, Some(at_most)) => write!(f, "*{{,{at_most}}}"),
-            PgLQueryLevel::Star(_, _) => write!(f, "*"),
-            PgLQueryLevel::NonStar(variants) => write_variants(f, variants, false),
-            PgLQueryLevel::NotNonStar(variants) => write_variants(f, variants, true),
+            ClickHouseLQueryLevel::Star(Some(at_least), _) => write!(f, "*{{{at_least},}}"),
+            ClickHouseLQueryLevel::Star(_, Some(at_most)) => write!(f, "*{{,{at_most}}}"),
+            ClickHouseLQueryLevel::Star(_, _) => write!(f, "*"),
+            ClickHouseLQueryLevel::NonStar(variants) => write_variants(f, variants, false),
+            ClickHouseLQueryLevel::NotNonStar(variants) => write_variants(f, variants, true),
         }
     }
 }

@@ -14,10 +14,10 @@ use crate::executor::Executor;
 use crate::query::query;
 use crate::query_as::query_as;
 use crate::query_scalar::query_scalar;
-use crate::{PgConnectOptions, PgConnection, Postgres};
+use crate::{ClickHouseConnectOptions, ClickHouseConnection, ClickHouse};
 
-fn parse_for_maintenance(url: &str) -> Result<(PgConnectOptions, String), Error> {
-    let mut options = PgConnectOptions::from_str(url)?;
+fn parse_for_maintenance(url: &str) -> Result<(ClickHouseConnectOptions, String), Error> {
+    let mut options = ClickHouseConnectOptions::from_str(url)?;
 
     // pull out the name of the database to create
     let database = options
@@ -38,7 +38,7 @@ fn parse_for_maintenance(url: &str) -> Result<(PgConnectOptions, String), Error>
     Ok((options, database))
 }
 
-impl MigrateDatabase for Postgres {
+impl MigrateDatabase for ClickHouse {
     fn create_database(url: &str) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             let (options, database) = parse_for_maintenance(url)?;
@@ -110,7 +110,7 @@ impl MigrateDatabase for Postgres {
     }
 }
 
-impl Migrate for PgConnection {
+impl Migrate for ClickHouseConnection {
     fn ensure_migrations_table(&mut self) -> BoxFuture<'_, Result<(), MigrateError>> {
         Box::pin(async move {
             // language=SQL
@@ -273,7 +273,7 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
 }
 
 async fn execute_migration(
-    conn: &mut PgConnection,
+    conn: &mut ClickHouseConnection,
     migration: &Migration,
 ) -> Result<(), MigrateError> {
     let _ = conn
@@ -298,7 +298,7 @@ async fn execute_migration(
 }
 
 async fn revert_migration(
-    conn: &mut PgConnection,
+    conn: &mut ClickHouseConnection,
     migration: &Migration,
 ) -> Result<(), MigrateError> {
     let _ = conn
@@ -315,7 +315,7 @@ async fn revert_migration(
     Ok(())
 }
 
-async fn current_database(conn: &mut PgConnection) -> Result<String, MigrateError> {
+async fn current_database(conn: &mut ClickHouseConnection) -> Result<String, MigrateError> {
     // language=SQL
     Ok(query_scalar("SELECT current_database()")
         .fetch_one(conn)

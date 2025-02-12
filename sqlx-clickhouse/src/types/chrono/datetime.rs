@@ -2,44 +2,44 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use chrono::{
     DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc,
 };
 use std::mem;
 
-impl Type<Postgres> for NaiveDateTime {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMP
+impl Type<ClickHouse> for NaiveDateTime {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMP
     }
 }
 
-impl<Tz: TimeZone> Type<Postgres> for DateTime<Tz> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMPTZ
+impl<Tz: TimeZone> Type<ClickHouse> for DateTime<Tz> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMPTZ
     }
 }
 
-impl PgHasArrayType for NaiveDateTime {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMP_ARRAY
+impl ClickHouseHasArrayType for NaiveDateTime {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMP_ARRAY
     }
 }
 
-impl<Tz: TimeZone> PgHasArrayType for DateTime<Tz> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TIMESTAMPTZ_ARRAY
+impl<Tz: TimeZone> ClickHouseHasArrayType for DateTime<Tz> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TIMESTAMPTZ_ARRAY
     }
 }
 
-impl Encode<'_, Postgres> for NaiveDateTime {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+impl Encode<'_, ClickHouse> for NaiveDateTime {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         // TIMESTAMP is encoded as the microseconds since the epoch
         let micros = (*self - postgres_epoch_datetime())
             .num_microseconds()
-            .ok_or_else(|| format!("NaiveDateTime out of range for Postgres: {self:?}"))?;
+            .ok_or_else(|| format!("NaiveDateTime out of range for ClickHouse: {self:?}"))?;
 
-        Encode::<Postgres>::encode(micros, buf)
+        Encode::<ClickHouse>::encode(micros, buf)
     }
 
     fn size_hint(&self) -> usize {
@@ -47,23 +47,23 @@ impl Encode<'_, Postgres> for NaiveDateTime {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for NaiveDateTime {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for NaiveDateTime {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         Ok(match value.format() {
-            PgValueFormat::Binary => {
+            ClickHouseValueFormat::Binary => {
                 // TIMESTAMP is encoded as the microseconds since the epoch
-                let us = Decode::<Postgres>::decode(value)?;
+                let us = Decode::<ClickHouse>::decode(value)?;
                 postgres_epoch_datetime() + Duration::microseconds(us)
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let s = value.as_str()?;
                 NaiveDateTime::parse_from_str(
                     s,
                     if s.contains('+') {
                         // Contains a time-zone specifier
                         // This is given for timestamptz for some reason
-                        // Postgres already guarantees this to always be UTC
+                        // ClickHouse already guarantees this to always be UTC
                         "%Y-%m-%d %H:%M:%S%.f%#z"
                     } else {
                         "%Y-%m-%d %H:%M:%S%.f"
@@ -74,9 +74,9 @@ impl<'r> Decode<'r, Postgres> for NaiveDateTime {
     }
 }
 
-impl<Tz: TimeZone> Encode<'_, Postgres> for DateTime<Tz> {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
-        Encode::<Postgres>::encode(self.naive_utc(), buf)
+impl<Tz: TimeZone> Encode<'_, ClickHouse> for DateTime<Tz> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
+        Encode::<ClickHouse>::encode(self.naive_utc(), buf)
     }
 
     fn size_hint(&self) -> usize {
@@ -84,36 +84,36 @@ impl<Tz: TimeZone> Encode<'_, Postgres> for DateTime<Tz> {
     }
 }
 
-impl<'r> Decode<'r, Postgres> for DateTime<Local> {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
-        let fixed = <DateTime<FixedOffset> as Decode<Postgres>>::decode(value)?;
+impl<'r> Decode<'r, ClickHouse> for DateTime<Local> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
+        let fixed = <DateTime<FixedOffset> as Decode<ClickHouse>>::decode(value)?;
         Ok(Local.from_utc_datetime(&fixed.naive_utc()))
     }
 }
 
-impl<'r> Decode<'r, Postgres> for DateTime<Utc> {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
-        let fixed = <DateTime<FixedOffset> as Decode<Postgres>>::decode(value)?;
+impl<'r> Decode<'r, ClickHouse> for DateTime<Utc> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
+        let fixed = <DateTime<FixedOffset> as Decode<ClickHouse>>::decode(value)?;
         Ok(Utc.from_utc_datetime(&fixed.naive_utc()))
     }
 }
 
-impl<'r> Decode<'r, Postgres> for DateTime<FixedOffset> {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+impl<'r> Decode<'r, ClickHouse> for DateTime<FixedOffset> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         Ok(match value.format() {
-            PgValueFormat::Binary => {
-                let naive = <NaiveDateTime as Decode<Postgres>>::decode(value)?;
+            ClickHouseValueFormat::Binary => {
+                let naive = <NaiveDateTime as Decode<ClickHouse>>::decode(value)?;
                 Utc.fix().from_utc_datetime(&naive)
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 let s = value.as_str()?;
                 DateTime::parse_from_str(
                     s,
                     if s.contains('+') || s.contains('-') {
                         // Contains a time-zone specifier
                         // This is given for timestamptz for some reason
-                        // Postgres already guarantees this to always be UTC
+                        // ClickHouse already guarantees this to always be UTC
                         "%Y-%m-%d %H:%M:%S%.f%#z"
                     } else {
                         "%Y-%m-%d %H:%M:%S%.f"

@@ -6,9 +6,9 @@ use crate::encode::{Encode, IsNull};
 use crate::error::Error;
 use crate::ext::ustr::UStr;
 use crate::types::Type;
-use crate::{PgConnection, PgTypeInfo, Postgres};
+use crate::{ClickHouseConnection, ClickHouseTypeInfo, ClickHouse};
 
-use crate::type_info::PgArrayOf;
+use crate::type_info::ClickHouseArrayOf;
 pub(crate) use sqlx_core::arguments::Arguments;
 use sqlx_core::error::BoxDynError;
 
@@ -16,14 +16,14 @@ use sqlx_core::error::BoxDynError;
 // TODO: Extend the patch system to support dynamic lengths
 //       Considerations:
 //          - The prefixed-len offset needs to be back-tracked and updated
-//          - message::Bind needs to take a &PgArguments and use a `write` method instead of
+//          - message::Bind needs to take a &ClickHouseArguments and use a `write` method instead of
 //            referencing a buffer directly
 //          - The basic idea is that we write bytes for the buffer until we get somewhere
 //            that has a patch, we then apply the patch which should write to &mut Vec<u8>,
 //            backtrack and update the prefixed-len, then write until the next patch offset
 
 #[derive(Default, Debug, Clone)]
-pub struct PgArgumentBuffer {
+pub struct ClickHouseArgumentBuffer {
     buffer: Vec<u8>,
 
     // Number of arguments
@@ -36,7 +36,7 @@ pub struct PgArgumentBuffer {
     // tweaked from the input type. However, that's the only use case we currently have.
     patches: Vec<Patch>,
 
-    // Whenever an `Encode` impl encounters a `PgTypeInfo` object that does not have an OID
+    // Whenever an `Encode` impl encounters a `ClickHouseTypeInfo` object that does not have an OID
     // It pushes a "hole" that must be patched later.
     //
     // The hole is a `usize` offset into the buffer with the type name that should be resolved
@@ -49,7 +49,7 @@ pub struct PgArgumentBuffer {
 #[derive(Debug, Clone)]
 enum HoleKind {
     Type { name: UStr },
-    Array(Arc<PgArrayOf>),
+    Array(Arc<ClickHouseArrayOf>),
 }
 
 #[derive(Clone)]
@@ -57,7 +57,7 @@ struct Patch {
     buf_offset: usize,
     arg_index: usize,
     #[allow(clippy::type_complexity)]
-    callback: Arc<dyn Fn(&mut [u8], &PgTypeInfo) + 'static + Send + Sync>,
+    callback: Arc<dyn Fn(&mut [u8], &ClickHouseTypeInfo) + 'static + Send + Sync>,
 }
 
 impl fmt::Debug for Patch {
@@ -70,20 +70,20 @@ impl fmt::Debug for Patch {
     }
 }
 
-/// Implementation of [`Arguments`] for PostgreSQL.
+/// Implementation of [`Arguments`] for ClickHouse.
 #[derive(Default, Debug, Clone)]
-pub struct PgArguments {
+pub struct ClickHouseArguments {
     // Types of each bind parameter
-    pub(crate) types: Vec<PgTypeInfo>,
+    pub(crate) types: Vec<ClickHouseTypeInfo>,
 
     // Buffer of encoded bind parameters
-    pub(crate) buffer: PgArgumentBuffer,
+    pub(crate) buffer: ClickHouseArgumentBuffer,
 }
 
-impl PgArguments {
+impl ClickHouseArguments {
     pub(crate) fn add<'q, T>(&mut self, value: T) -> Result<(), BoxDynError>
     where
-        T: Encode<'q, Postgres> + Type<Postgres>,
+        T: Encode<'q, ClickHouse> + Type<ClickHouse>,
     {
         let type_info = value.produces().unwrap_or_else(T::type_info);
 
@@ -109,10 +109,10 @@ impl PgArguments {
     // This should only go out and ask postgres if we have not seen the type name yet
     pub(crate) async fn apply_patches(
         &mut self,
-        conn: &mut PgConnection,
-        parameters: &[PgTypeInfo],
+        conn: &mut ClickHouseConnection,
+        parameters: &[ClickHouseTypeInfo],
     ) -> Result<(), Error> {
-        let PgArgumentBuffer {
+        let ClickHouseArgumentBuffer {
             ref patches,
             ref type_holes,
             ref mut buffer,
@@ -138,8 +138,8 @@ impl PgArguments {
     }
 }
 
-impl<'q> Arguments<'q> for PgArguments {
-    type Database = Postgres;
+impl<'q> Arguments<'q> for ClickHouseArguments {
+    type Database = ClickHouse;
 
     fn reserve(&mut self, additional: usize, size: usize) {
         self.types.reserve(additional);
@@ -163,10 +163,10 @@ impl<'q> Arguments<'q> for PgArguments {
     }
 }
 
-impl PgArgumentBuffer {
+impl ClickHouseArgumentBuffer {
     pub(crate) fn encode<'q, T>(&mut self, value: T) -> Result<(), BoxDynError>
     where
-        T: Encode<'q, Postgres>,
+        T: Encode<'q, ClickHouse>,
     {
         // Won't catch everything but is a good sanity check
         value_size_int4_checked(value.size_hint())?;
@@ -198,7 +198,7 @@ impl PgArgumentBuffer {
     #[allow(dead_code)]
     pub(crate) fn patch<F>(&mut self, callback: F)
     where
-        F: Fn(&mut [u8], &PgTypeInfo) + 'static + Send + Sync,
+        F: Fn(&mut [u8], &ClickHouseTypeInfo) + 'static + Send + Sync,
     {
         let offset = self.len();
         let arg_index = self.count;
@@ -224,14 +224,14 @@ impl PgArgumentBuffer {
         ));
     }
 
-    pub(crate) fn patch_array_type(&mut self, array: Arc<PgArrayOf>) {
+    pub(crate) fn patch_array_type(&mut self, array: Arc<ClickHouseArrayOf>) {
         let offset = self.len();
 
         self.extend_from_slice(&0_u32.to_be_bytes());
         self.type_holes.push((offset, HoleKind::Array(array)));
     }
 
-    fn snapshot(&self) -> PgArgumentBufferSnapshot {
+    fn snapshot(&self) -> ClickHouseArgumentBufferSnapshot {
         let Self {
             buffer,
             count,
@@ -239,7 +239,7 @@ impl PgArgumentBuffer {
             type_holes,
         } = self;
 
-        PgArgumentBufferSnapshot {
+        ClickHouseArgumentBufferSnapshot {
             buffer_length: buffer.len(),
             count: *count,
             patches_length: patches.len(),
@@ -249,12 +249,12 @@ impl PgArgumentBuffer {
 
     fn reset_to_snapshot(
         &mut self,
-        PgArgumentBufferSnapshot {
+        ClickHouseArgumentBufferSnapshot {
             buffer_length,
             count,
             patches_length,
             type_holes_length,
-        }: PgArgumentBufferSnapshot,
+        }: ClickHouseArgumentBufferSnapshot,
     ) {
         self.buffer.truncate(buffer_length);
         self.count = count;
@@ -263,14 +263,14 @@ impl PgArgumentBuffer {
     }
 }
 
-struct PgArgumentBufferSnapshot {
+struct ClickHouseArgumentBufferSnapshot {
     buffer_length: usize,
     count: usize,
     patches_length: usize,
     type_holes_length: usize,
 }
 
-impl Deref for PgArgumentBuffer {
+impl Deref for ClickHouseArgumentBuffer {
     type Target = Vec<u8>;
 
     #[inline]
@@ -279,7 +279,7 @@ impl Deref for PgArgumentBuffer {
     }
 }
 
-impl DerefMut for PgArgumentBuffer {
+impl DerefMut for ClickHouseArgumentBuffer {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.buffer

@@ -1,40 +1,40 @@
 use crate::decode::Decode;
 use crate::error::BoxDynError;
-use crate::types::PgRecordDecoder;
+use crate::types::ClickHouseRecordDecoder;
 use crate::types::Type;
-use crate::{PgHasArrayType, PgTypeInfo, PgValueRef, Postgres};
+use crate::{ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueRef, ClickHouse};
 
 macro_rules! impl_type_for_tuple {
     ($( $idx:ident : $T:ident ),*) => {
-        impl<$($T,)*> Type<Postgres> for ($($T,)*) {
+        impl<$($T,)*> Type<ClickHouse> for ($($T,)*) {
 
 
             #[inline]
-            fn type_info() -> PgTypeInfo {
-                PgTypeInfo::RECORD
+            fn type_info() -> ClickHouseTypeInfo {
+                ClickHouseTypeInfo::RECORD
             }
         }
 
-        impl<$($T,)*> PgHasArrayType for ($($T,)*) {
+        impl<$($T,)*> ClickHouseHasArrayType for ($($T,)*) {
 
 
             #[inline]
-            fn array_type_info() -> PgTypeInfo {
-                PgTypeInfo::RECORD_ARRAY
+            fn array_type_info() -> ClickHouseTypeInfo {
+                ClickHouseTypeInfo::RECORD_ARRAY
             }
         }
 
-        impl<'r, $($T,)*> Decode<'r, Postgres> for ($($T,)*)
+        impl<'r, $($T,)*> Decode<'r, ClickHouse> for ($($T,)*)
         where
             $($T: 'r,)*
-            $($T: Type<Postgres>,)*
-            $($T: for<'a> Decode<'a, Postgres>,)*
+            $($T: Type<ClickHouse>,)*
+            $($T: for<'a> Decode<'a, ClickHouse>,)*
         {
 
 
-            fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+            fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
                 #[allow(unused)]
-                let mut decoder = PgRecordDecoder::new(value)?;
+                let mut decoder = ClickHouseRecordDecoder::new(value)?;
 
                 $(let $idx: $T = decoder.try_decode()?;)*
 

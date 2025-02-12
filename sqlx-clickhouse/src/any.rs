@@ -1,6 +1,6 @@
 use crate::{
-    Either, PgColumn, PgConnectOptions, PgConnection, PgQueryResult, PgRow, PgTransactionManager,
-    PgTypeInfo, Postgres,
+    Either, ClickHouseColumn, ClickHouseConnectOptions, ClickHouseConnection, ClickHouseQueryResult, ClickHouseRow, ClickHouseTransactionManager,
+    ClickHouseTypeInfo, ClickHouse,
 };
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
@@ -12,7 +12,7 @@ use sqlx_core::any::{
     AnyStatement, AnyTypeInfo, AnyTypeInfoKind,
 };
 
-use crate::type_info::PgType;
+use crate::type_info::ClickHouseType;
 use sqlx_core::connection::Connection;
 use sqlx_core::database::Database;
 use sqlx_core::describe::Describe;
@@ -20,11 +20,11 @@ use sqlx_core::executor::Executor;
 use sqlx_core::ext::ustr::UStr;
 use sqlx_core::transaction::TransactionManager;
 
-sqlx_core::declare_driver_with_optional_migrate!(DRIVER = Postgres);
+sqlx_core::declare_driver_with_optional_migrate!(DRIVER = ClickHouse);
 
-impl AnyConnectionBackend for PgConnection {
+impl AnyConnectionBackend for ClickHouseConnection {
     fn name(&self) -> &str {
-        <Postgres as Database>::NAME
+        <ClickHouse as Database>::NAME
     }
 
     fn close(self: Box<Self>) -> BoxFuture<'static, sqlx_core::Result<()>> {
@@ -40,19 +40,19 @@ impl AnyConnectionBackend for PgConnection {
     }
 
     fn begin(&mut self) -> BoxFuture<'_, sqlx_core::Result<()>> {
-        PgTransactionManager::begin(self)
+        ClickHouseTransactionManager::begin(self)
     }
 
     fn commit(&mut self) -> BoxFuture<'_, sqlx_core::Result<()>> {
-        PgTransactionManager::commit(self)
+        ClickHouseTransactionManager::commit(self)
     }
 
     fn rollback(&mut self) -> BoxFuture<'_, sqlx_core::Result<()>> {
-        PgTransactionManager::rollback(self)
+        ClickHouseTransactionManager::rollback(self)
     }
 
     fn start_rollback(&mut self) {
-        PgTransactionManager::start_rollback(self)
+        ClickHouseTransactionManager::start_rollback(self)
     }
 
     fn shrink_buffers(&mut self) {
@@ -92,7 +92,7 @@ impl AnyConnectionBackend for PgConnection {
             self.run(query, arguments, 0, persistent, None)
                 .try_flatten_stream()
                 .map(
-                    move |res: sqlx_core::Result<Either<PgQueryResult, PgRow>>| match res? {
+                    move |res: sqlx_core::Result<Either<ClickHouseQueryResult, ClickHouseRow>>| match res? {
                         Either::Left(result) => Ok(Either::Left(map_result(result))),
                         Either::Right(row) => Ok(Either::Right(AnyRow::try_from(&row)?)),
                     },
@@ -180,25 +180,25 @@ impl AnyConnectionBackend for PgConnection {
     }
 }
 
-impl<'a> TryFrom<&'a PgTypeInfo> for AnyTypeInfo {
+impl<'a> TryFrom<&'a ClickHouseTypeInfo> for AnyTypeInfo {
     type Error = sqlx_core::Error;
 
-    fn try_from(pg_type: &'a PgTypeInfo) -> Result<Self, Self::Error> {
+    fn try_from(pg_type: &'a ClickHouseTypeInfo) -> Result<Self, Self::Error> {
         Ok(AnyTypeInfo {
             kind: match &pg_type.0 {
-                PgType::Bool => AnyTypeInfoKind::Bool,
-                PgType::Void => AnyTypeInfoKind::Null,
-                PgType::Int2 => AnyTypeInfoKind::SmallInt,
-                PgType::Int4 => AnyTypeInfoKind::Integer,
-                PgType::Int8 => AnyTypeInfoKind::BigInt,
-                PgType::Float4 => AnyTypeInfoKind::Real,
-                PgType::Float8 => AnyTypeInfoKind::Double,
-                PgType::Bytea => AnyTypeInfoKind::Blob,
-                PgType::Text | PgType::Varchar => AnyTypeInfoKind::Text,
-                PgType::DeclareWithName(UStr::Static("citext")) => AnyTypeInfoKind::Text,
+                ClickHouseType::Bool => AnyTypeInfoKind::Bool,
+                ClickHouseType::Void => AnyTypeInfoKind::Null,
+                ClickHouseType::Int2 => AnyTypeInfoKind::SmallInt,
+                ClickHouseType::Int4 => AnyTypeInfoKind::Integer,
+                ClickHouseType::Int8 => AnyTypeInfoKind::BigInt,
+                ClickHouseType::Float4 => AnyTypeInfoKind::Real,
+                ClickHouseType::Float8 => AnyTypeInfoKind::Double,
+                ClickHouseType::Bytea => AnyTypeInfoKind::Blob,
+                ClickHouseType::Text | ClickHouseType::Varchar => AnyTypeInfoKind::Text,
+                ClickHouseType::DeclareWithName(UStr::Static("citext")) => AnyTypeInfoKind::Text,
                 _ => {
                     return Err(sqlx_core::Error::AnyDriverError(
-                        format!("Any driver does not support the Postgres type {pg_type:?}").into(),
+                        format!("Any driver does not support the ClickHouse type {pg_type:?}").into(),
                     ))
                 }
             },
@@ -206,10 +206,10 @@ impl<'a> TryFrom<&'a PgTypeInfo> for AnyTypeInfo {
     }
 }
 
-impl<'a> TryFrom<&'a PgColumn> for AnyColumn {
+impl<'a> TryFrom<&'a ClickHouseColumn> for AnyColumn {
     type Error = sqlx_core::Error;
 
-    fn try_from(col: &'a PgColumn) -> Result<Self, Self::Error> {
+    fn try_from(col: &'a ClickHouseColumn) -> Result<Self, Self::Error> {
         let type_info =
             AnyTypeInfo::try_from(&col.type_info).map_err(|e| sqlx_core::Error::ColumnDecode {
                 index: col.name.to_string(),
@@ -224,25 +224,25 @@ impl<'a> TryFrom<&'a PgColumn> for AnyColumn {
     }
 }
 
-impl<'a> TryFrom<&'a PgRow> for AnyRow {
+impl<'a> TryFrom<&'a ClickHouseRow> for AnyRow {
     type Error = sqlx_core::Error;
 
-    fn try_from(row: &'a PgRow) -> Result<Self, Self::Error> {
+    fn try_from(row: &'a ClickHouseRow) -> Result<Self, Self::Error> {
         AnyRow::map_from(row, row.metadata.column_names.clone())
     }
 }
 
-impl<'a> TryFrom<&'a AnyConnectOptions> for PgConnectOptions {
+impl<'a> TryFrom<&'a AnyConnectOptions> for ClickHouseConnectOptions {
     type Error = sqlx_core::Error;
 
     fn try_from(value: &'a AnyConnectOptions) -> Result<Self, Self::Error> {
-        let mut opts = PgConnectOptions::parse_from_url(&value.database_url)?;
+        let mut opts = ClickHouseConnectOptions::parse_from_url(&value.database_url)?;
         opts.log_settings = value.log_settings.clone();
         Ok(opts)
     }
 }
 
-fn map_result(res: PgQueryResult) -> AnyQueryResult {
+fn map_result(res: ClickHouseQueryResult) -> AnyQueryResult {
     AnyQueryResult {
         rows_affected: res.rows_affected(),
         last_insert_id: None,

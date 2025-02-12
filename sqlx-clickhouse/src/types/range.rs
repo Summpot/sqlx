@@ -7,9 +7,9 @@ use sqlx_core::bytes::Buf;
 use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
-use crate::type_info::PgTypeKind;
+use crate::type_info::ClickHouseTypeKind;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 
 // https://github.com/postgres/postgres/blob/2f48ede080f42b97b594fb14102c82ca1001b80c/src/include/utils/rangetypes.h#L35-L44
 bitflags! {
@@ -27,19 +27,19 @@ bitflags! {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct PgRange<T> {
+pub struct ClickHouseRange<T> {
     pub start: Bound<T>,
     pub end: Bound<T>,
 }
 
-impl<T> From<[Bound<T>; 2]> for PgRange<T> {
+impl<T> From<[Bound<T>; 2]> for ClickHouseRange<T> {
     fn from(v: [Bound<T>; 2]) -> Self {
         let [start, end] = v;
         Self { start, end }
     }
 }
 
-impl<T> From<(Bound<T>, Bound<T>)> for PgRange<T> {
+impl<T> From<(Bound<T>, Bound<T>)> for ClickHouseRange<T> {
     fn from(v: (Bound<T>, Bound<T>)) -> Self {
         Self {
             start: v.0,
@@ -48,7 +48,7 @@ impl<T> From<(Bound<T>, Bound<T>)> for PgRange<T> {
     }
 }
 
-impl<T> From<Range<T>> for PgRange<T> {
+impl<T> From<Range<T>> for ClickHouseRange<T> {
     fn from(v: Range<T>) -> Self {
         Self {
             start: Bound::Included(v.start),
@@ -57,7 +57,7 @@ impl<T> From<Range<T>> for PgRange<T> {
     }
 }
 
-impl<T> From<RangeFrom<T>> for PgRange<T> {
+impl<T> From<RangeFrom<T>> for ClickHouseRange<T> {
     fn from(v: RangeFrom<T>) -> Self {
         Self {
             start: Bound::Included(v.start),
@@ -66,7 +66,7 @@ impl<T> From<RangeFrom<T>> for PgRange<T> {
     }
 }
 
-impl<T> From<RangeInclusive<T>> for PgRange<T> {
+impl<T> From<RangeInclusive<T>> for ClickHouseRange<T> {
     fn from(v: RangeInclusive<T>) -> Self {
         let (start, end) = v.into_inner();
         Self {
@@ -76,7 +76,7 @@ impl<T> From<RangeInclusive<T>> for PgRange<T> {
     }
 }
 
-impl<T> From<RangeTo<T>> for PgRange<T> {
+impl<T> From<RangeTo<T>> for ClickHouseRange<T> {
     fn from(v: RangeTo<T>) -> Self {
         Self {
             start: Bound::Unbounded,
@@ -85,7 +85,7 @@ impl<T> From<RangeTo<T>> for PgRange<T> {
     }
 }
 
-impl<T> From<RangeToInclusive<T>> for PgRange<T> {
+impl<T> From<RangeToInclusive<T>> for ClickHouseRange<T> {
     fn from(v: RangeToInclusive<T>) -> Self {
         Self {
             start: Bound::Unbounded,
@@ -94,7 +94,7 @@ impl<T> From<RangeToInclusive<T>> for PgRange<T> {
     }
 }
 
-impl<T> RangeBounds<T> for PgRange<T> {
+impl<T> RangeBounds<T> for ClickHouseRange<T> {
     fn start_bound(&self) -> Bound<&T> {
         match self.start {
             Bound::Included(ref start) => Bound::Included(start),
@@ -112,187 +112,187 @@ impl<T> RangeBounds<T> for PgRange<T> {
     }
 }
 
-impl Type<Postgres> for PgRange<i32> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INT4_RANGE
+impl Type<ClickHouse> for ClickHouseRange<i32> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT4_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<i32>(ty)
     }
 }
 
-impl Type<Postgres> for PgRange<i64> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::INT8_RANGE
+impl Type<ClickHouse> for ClickHouseRange<i64> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT8_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<i64>(ty)
     }
 }
 
 #[cfg(feature = "bigdecimal")]
-impl Type<Postgres> for PgRange<bigdecimal::BigDecimal> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::NUM_RANGE
+impl Type<ClickHouse> for ClickHouseRange<bigdecimal::BigDecimal> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUM_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<bigdecimal::BigDecimal>(ty)
     }
 }
 
 #[cfg(feature = "rust_decimal")]
-impl Type<Postgres> for PgRange<rust_decimal::Decimal> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::NUM_RANGE
+impl Type<ClickHouse> for ClickHouseRange<rust_decimal::Decimal> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUM_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<rust_decimal::Decimal>(ty)
     }
 }
 
 #[cfg(feature = "chrono")]
-impl Type<Postgres> for PgRange<chrono::NaiveDate> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::DATE_RANGE
+impl Type<ClickHouse> for ClickHouseRange<chrono::NaiveDate> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::DATE_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<chrono::NaiveDate>(ty)
     }
 }
 
 #[cfg(feature = "chrono")]
-impl Type<Postgres> for PgRange<chrono::NaiveDateTime> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TS_RANGE
+impl Type<ClickHouse> for ClickHouseRange<chrono::NaiveDateTime> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TS_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<chrono::NaiveDateTime>(ty)
     }
 }
 
 #[cfg(feature = "chrono")]
-impl<Tz: chrono::TimeZone> Type<Postgres> for PgRange<chrono::DateTime<Tz>> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TSTZ_RANGE
+impl<Tz: chrono::TimeZone> Type<ClickHouse> for ClickHouseRange<chrono::DateTime<Tz>> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TSTZ_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<chrono::DateTime<Tz>>(ty)
     }
 }
 
 #[cfg(feature = "time")]
-impl Type<Postgres> for PgRange<time::Date> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::DATE_RANGE
+impl Type<ClickHouse> for ClickHouseRange<time::Date> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::DATE_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<time::Date>(ty)
     }
 }
 
 #[cfg(feature = "time")]
-impl Type<Postgres> for PgRange<time::PrimitiveDateTime> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TS_RANGE
+impl Type<ClickHouse> for ClickHouseRange<time::PrimitiveDateTime> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TS_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<time::PrimitiveDateTime>(ty)
     }
 }
 
 #[cfg(feature = "time")]
-impl Type<Postgres> for PgRange<time::OffsetDateTime> {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::TSTZ_RANGE
+impl Type<ClickHouse> for ClickHouseRange<time::OffsetDateTime> {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TSTZ_RANGE
     }
 
-    fn compatible(ty: &PgTypeInfo) -> bool {
+    fn compatible(ty: &ClickHouseTypeInfo) -> bool {
         range_compatible::<time::OffsetDateTime>(ty)
     }
 }
 
-impl PgHasArrayType for PgRange<i32> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT4_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<i32> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT4_RANGE_ARRAY
     }
 }
 
-impl PgHasArrayType for PgRange<i64> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::INT8_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<i64> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::INT8_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "bigdecimal")]
-impl PgHasArrayType for PgRange<bigdecimal::BigDecimal> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::NUM_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<bigdecimal::BigDecimal> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUM_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "rust_decimal")]
-impl PgHasArrayType for PgRange<rust_decimal::Decimal> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::NUM_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<rust_decimal::Decimal> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::NUM_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "chrono")]
-impl PgHasArrayType for PgRange<chrono::NaiveDate> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::DATE_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<chrono::NaiveDate> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::DATE_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "chrono")]
-impl PgHasArrayType for PgRange<chrono::NaiveDateTime> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TS_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<chrono::NaiveDateTime> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TS_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "chrono")]
-impl<Tz: chrono::TimeZone> PgHasArrayType for PgRange<chrono::DateTime<Tz>> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TSTZ_RANGE_ARRAY
+impl<Tz: chrono::TimeZone> ClickHouseHasArrayType for ClickHouseRange<chrono::DateTime<Tz>> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TSTZ_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "time")]
-impl PgHasArrayType for PgRange<time::Date> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::DATE_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<time::Date> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::DATE_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "time")]
-impl PgHasArrayType for PgRange<time::PrimitiveDateTime> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TS_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<time::PrimitiveDateTime> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TS_RANGE_ARRAY
     }
 }
 
 #[cfg(feature = "time")]
-impl PgHasArrayType for PgRange<time::OffsetDateTime> {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::TSTZ_RANGE_ARRAY
+impl ClickHouseHasArrayType for ClickHouseRange<time::OffsetDateTime> {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::TSTZ_RANGE_ARRAY
     }
 }
 
-impl<'q, T> Encode<'q, Postgres> for PgRange<T>
+impl<'q, T> Encode<'q, ClickHouse> for ClickHouseRange<T>
 where
-    T: Encode<'q, Postgres>,
+    T: Encode<'q, ClickHouse>,
 {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         // https://github.com/postgres/postgres/blob/2f48ede080f42b97b594fb14102c82ca1001b80c/src/backend/utils/adt/rangetypes.c#L245
 
         let mut flags = RangeFlags::empty();
@@ -324,14 +324,14 @@ where
     }
 }
 
-impl<'r, T> Decode<'r, Postgres> for PgRange<T>
+impl<'r, T> Decode<'r, ClickHouse> for ClickHouseRange<T>
 where
-    T: Type<Postgres> + for<'a> Decode<'a, Postgres>,
+    T: Type<ClickHouse> + for<'a> Decode<'a, ClickHouse>,
 {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, BoxDynError> {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, BoxDynError> {
         match value.format {
-            PgValueFormat::Binary => {
-                let element_ty = if let PgTypeKind::Range(element) = &value.type_info.0.kind() {
+            ClickHouseValueFormat::Binary => {
+                let element_ty = if let ClickHouseTypeKind::Range(element) = &value.type_info.0.kind() {
                     element
                 } else {
                     return Err(format!("unexpected non-range type {}", value.type_info).into());
@@ -345,12 +345,12 @@ where
                 let flags = RangeFlags::from_bits_truncate(buf.get_u8());
 
                 if flags.contains(RangeFlags::EMPTY) {
-                    return Ok(PgRange { start, end });
+                    return Ok(ClickHouseRange { start, end });
                 }
 
                 if !flags.contains(RangeFlags::LB_INF) {
                     let value =
-                        T::decode(PgValueRef::get(&mut buf, value.format, element_ty.clone())?)?;
+                        T::decode(ClickHouseValueRef::get(&mut buf, value.format, element_ty.clone())?)?;
 
                     start = if flags.contains(RangeFlags::LB_INC) {
                         Bound::Included(value)
@@ -361,7 +361,7 @@ where
 
                 if !flags.contains(RangeFlags::UB_INF) {
                     let value =
-                        T::decode(PgValueRef::get(&mut buf, value.format, element_ty.clone())?)?;
+                        T::decode(ClickHouseValueRef::get(&mut buf, value.format, element_ty.clone())?)?;
 
                     end = if flags.contains(RangeFlags::UB_INC) {
                         Bound::Included(value)
@@ -370,10 +370,10 @@ where
                     };
                 }
 
-                Ok(PgRange { start, end })
+                Ok(ClickHouseRange { start, end })
             }
 
-            PgValueFormat::Text => {
+            ClickHouseValueFormat::Text => {
                 // https://github.com/postgres/postgres/blob/2f48ede080f42b97b594fb14102c82ca1001b80c/src/backend/utils/adt/rangetypes.c#L2046
 
                 let mut start = None;
@@ -446,9 +446,9 @@ where
 
                     count += 1;
                     if !element.is_empty() || quoted {
-                        let value = Some(T::decode(PgValueRef {
+                        let value = Some(T::decode(ClickHouseValueRef {
                             type_info: T::type_info(),
-                            format: PgValueFormat::Text,
+                            format: ClickHouseValueFormat::Text,
                             value: Some(element.as_bytes()),
                             row: None,
                         })?);
@@ -466,7 +466,7 @@ where
                 let start = parse_bound(lower, start)?;
                 let end = parse_bound(upper, end)?;
 
-                Ok(PgRange { start, end })
+                Ok(ClickHouseRange { start, end })
             }
         }
     }
@@ -490,7 +490,7 @@ fn parse_bound<T>(ch: char, value: Option<T>) -> Result<Bound<T>, BoxDynError> {
     })
 }
 
-impl<T> Display for PgRange<T>
+impl<T> Display for ClickHouseRange<T>
 where
     T: Display,
 {
@@ -511,10 +511,10 @@ where
     }
 }
 
-fn range_compatible<E: Type<Postgres>>(ty: &PgTypeInfo) -> bool {
+fn range_compatible<E: Type<ClickHouse>>(ty: &ClickHouseTypeInfo) -> bool {
     // we require the declared type to be a _range_ with an
     // element type that is acceptable
-    if let PgTypeKind::Range(element) = &ty.kind() {
+    if let ClickHouseTypeKind::Range(element) = &ty.kind() {
         return E::compatible(element);
     }
 

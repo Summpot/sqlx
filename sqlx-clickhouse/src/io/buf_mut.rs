@@ -1,6 +1,6 @@
 use crate::io::{PortalId, StatementId};
 
-pub trait PgBufMutExt {
+pub trait ClickHouseBufMutExt {
     fn put_length_prefixed<F>(&mut self, f: F) -> Result<(), crate::Error>
     where
         F: FnOnce(&mut Vec<u8>) -> Result<(), crate::Error>;
@@ -10,7 +10,7 @@ pub trait PgBufMutExt {
     fn put_portal_name(&mut self, id: PortalId);
 }
 
-impl PgBufMutExt for Vec<u8> {
+impl ClickHouseBufMutExt for Vec<u8> {
     // writes a length-prefixed message, this is used when encoding nearly all messages as postgres
     // wants us to send the length of the often-variable-sized messages up front
     fn put_length_prefixed<F>(&mut self, write_contents: F) -> Result<(), crate::Error>

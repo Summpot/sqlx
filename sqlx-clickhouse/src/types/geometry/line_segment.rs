@@ -2,13 +2,13 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::error::BoxDynError;
 use crate::types::Type;
-use crate::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef, Postgres};
+use crate::{ClickHouseArgumentBuffer, ClickHouseHasArrayType, ClickHouseTypeInfo, ClickHouseValueFormat, ClickHouseValueRef, ClickHouse};
 use sqlx_core::bytes::Buf;
 use std::str::FromStr;
 
 const ERROR: &str = "error decoding LSEG";
 
-/// ## Postgres Geometric Line Segment type
+/// ## ClickHouse Geometric Line Segment type
 ///
 /// Description: Finite line segment
 /// Representation: `((start_x,start_y),(end_x,end_y))`
@@ -26,46 +26,46 @@ const ERROR: &str = "error decoding LSEG";
 /// See https://www.postgresql.org/docs/16/datatype-geometric.html#DATATYPE-LSEG
 #[doc(alias = "line segment")]
 #[derive(Debug, Clone, PartialEq)]
-pub struct PgLSeg {
+pub struct ClickHouseLSeg {
     pub start_x: f64,
     pub start_y: f64,
     pub end_x: f64,
     pub end_y: f64,
 }
 
-impl Type<Postgres> for PgLSeg {
-    fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("lseg")
+impl Type<ClickHouse> for ClickHouseLSeg {
+    fn type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("lseg")
     }
 }
 
-impl PgHasArrayType for PgLSeg {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_lseg")
+impl ClickHouseHasArrayType for ClickHouseLSeg {
+    fn array_type_info() -> ClickHouseTypeInfo {
+        ClickHouseTypeInfo::with_name("_lseg")
     }
 }
 
-impl<'r> Decode<'r, Postgres> for PgLSeg {
-    fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+impl<'r> Decode<'r, ClickHouse> for ClickHouseLSeg {
+    fn decode(value: ClickHouseValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         match value.format() {
-            PgValueFormat::Text => Ok(PgLSeg::from_str(value.as_str()?)?),
-            PgValueFormat::Binary => Ok(PgLSeg::from_bytes(value.as_bytes()?)?),
+            ClickHouseValueFormat::Text => Ok(ClickHouseLSeg::from_str(value.as_str()?)?),
+            ClickHouseValueFormat::Binary => Ok(ClickHouseLSeg::from_bytes(value.as_bytes()?)?),
         }
     }
 }
 
-impl<'q> Encode<'q, Postgres> for PgLSeg {
-    fn produces(&self) -> Option<PgTypeInfo> {
-        Some(PgTypeInfo::with_name("lseg"))
+impl<'q> Encode<'q, ClickHouse> for ClickHouseLSeg {
+    fn produces(&self) -> Option<ClickHouseTypeInfo> {
+        Some(ClickHouseTypeInfo::with_name("lseg"))
     }
 
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut ClickHouseArgumentBuffer) -> Result<IsNull, BoxDynError> {
         self.serialize(buf)?;
         Ok(IsNull::No)
     }
 }
 
-impl FromStr for PgLSeg {
+impl FromStr for ClickHouseLSeg {
     type Err = BoxDynError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -96,7 +96,7 @@ impl FromStr for PgLSeg {
             return Err(format!("{}: too many numbers inputted in {}", ERROR, s).into());
         }
 
-        Ok(PgLSeg {
+        Ok(ClickHouseLSeg {
             start_x,
             start_y,
             end_x,
@@ -105,14 +105,14 @@ impl FromStr for PgLSeg {
     }
 }
 
-impl PgLSeg {
-    fn from_bytes(mut bytes: &[u8]) -> Result<PgLSeg, BoxDynError> {
+impl ClickHouseLSeg {
+    fn from_bytes(mut bytes: &[u8]) -> Result<ClickHouseLSeg, BoxDynError> {
         let start_x = bytes.get_f64();
         let start_y = bytes.get_f64();
         let end_x = bytes.get_f64();
         let end_y = bytes.get_f64();
 
-        Ok(PgLSeg {
+        Ok(ClickHouseLSeg {
             start_x,
             start_y,
             end_x,
@@ -120,7 +120,7 @@ impl PgLSeg {
         })
     }
 
-    fn serialize(&self, buff: &mut PgArgumentBuffer) -> Result<(), BoxDynError> {
+    fn serialize(&self, buff: &mut ClickHouseArgumentBuffer) -> Result<(), BoxDynError> {
         buff.extend_from_slice(&self.start_x.to_be_bytes());
         buff.extend_from_slice(&self.start_y.to_be_bytes());
         buff.extend_from_slice(&self.end_x.to_be_bytes());
@@ -130,7 +130,7 @@ impl PgLSeg {
 
     #[cfg(test)]
     fn serialize_to_vec(&self) -> Vec<u8> {
-        let mut buff = PgArgumentBuffer::default();
+        let mut buff = ClickHouseArgumentBuffer::default();
         self.serialize(&mut buff).unwrap();
         buff.to_vec()
     }
@@ -141,7 +141,7 @@ mod lseg_tests {
 
     use std::str::FromStr;
 
-    use super::PgLSeg;
+    use super::ClickHouseLSeg;
 
     const LINE_SEGMENT_BYTES: &[u8] = &[
         63, 241, 153, 153, 153, 153, 153, 154, 64, 1, 153, 153, 153, 153, 153, 154, 64, 10, 102,
@@ -150,10 +150,10 @@ mod lseg_tests {
 
     #[test]
     fn can_deserialise_lseg_type_bytes() {
-        let lseg = PgLSeg::from_bytes(LINE_SEGMENT_BYTES).unwrap();
+        let lseg = ClickHouseLSeg::from_bytes(LINE_SEGMENT_BYTES).unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.1,
                 start_y: 2.2,
                 end_x: 3.3,
@@ -164,10 +164,10 @@ mod lseg_tests {
 
     #[test]
     fn can_deserialise_lseg_type_str_first_syntax() {
-        let lseg = PgLSeg::from_str("[( 1, 2), (3, 4 )]").unwrap();
+        let lseg = ClickHouseLSeg::from_str("[( 1, 2), (3, 4 )]").unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.,
                 start_y: 2.,
                 end_x: 3.,
@@ -177,10 +177,10 @@ mod lseg_tests {
     }
     #[test]
     fn can_deserialise_lseg_type_str_second_syntax() {
-        let lseg = PgLSeg::from_str("(( 1, 2), (3, 4 ))").unwrap();
+        let lseg = ClickHouseLSeg::from_str("(( 1, 2), (3, 4 ))").unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.,
                 start_y: 2.,
                 end_x: 3.,
@@ -191,10 +191,10 @@ mod lseg_tests {
 
     #[test]
     fn can_deserialise_lseg_type_str_third_syntax() {
-        let lseg = PgLSeg::from_str("(1, 2), (3, 4 )").unwrap();
+        let lseg = ClickHouseLSeg::from_str("(1, 2), (3, 4 )").unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.,
                 start_y: 2.,
                 end_x: 3.,
@@ -205,10 +205,10 @@ mod lseg_tests {
 
     #[test]
     fn can_deserialise_lseg_type_str_fourth_syntax() {
-        let lseg = PgLSeg::from_str("1, 2, 3, 4").unwrap();
+        let lseg = ClickHouseLSeg::from_str("1, 2, 3, 4").unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.,
                 start_y: 2.,
                 end_x: 3.,
@@ -220,7 +220,7 @@ mod lseg_tests {
     #[test]
     fn can_deserialise_too_many_numbers() {
         let input_str = "1, 2, 3, 4, 5";
-        let lseg = PgLSeg::from_str(input_str);
+        let lseg = ClickHouseLSeg::from_str(input_str);
         assert!(lseg.is_err());
         if let Err(err) = lseg {
             assert_eq!(
@@ -233,7 +233,7 @@ mod lseg_tests {
     #[test]
     fn can_deserialise_too_few_numbers() {
         let input_str = "1, 2, 3";
-        let lseg = PgLSeg::from_str(input_str);
+        let lseg = ClickHouseLSeg::from_str(input_str);
         assert!(lseg.is_err());
         if let Err(err) = lseg {
             assert_eq!(
@@ -246,7 +246,7 @@ mod lseg_tests {
     #[test]
     fn can_deserialise_invalid_numbers() {
         let input_str = "1, 2, 3, FOUR";
-        let lseg = PgLSeg::from_str(input_str);
+        let lseg = ClickHouseLSeg::from_str(input_str);
         assert!(lseg.is_err());
         if let Err(err) = lseg {
             assert_eq!(
@@ -258,10 +258,10 @@ mod lseg_tests {
 
     #[test]
     fn can_deserialise_lseg_type_str_float() {
-        let lseg = PgLSeg::from_str("(1.1, 2.2), (3.3, 4.4)").unwrap();
+        let lseg = ClickHouseLSeg::from_str("(1.1, 2.2), (3.3, 4.4)").unwrap();
         assert_eq!(
             lseg,
-            PgLSeg {
+            ClickHouseLSeg {
                 start_x: 1.1,
                 start_y: 2.2,
                 end_x: 3.3,
@@ -272,7 +272,7 @@ mod lseg_tests {
 
     #[test]
     fn can_serialise_lseg_type() {
-        let lseg = PgLSeg {
+        let lseg = ClickHouseLSeg {
             start_x: 1.1,
             start_y: 2.2,
             end_x: 3.3,

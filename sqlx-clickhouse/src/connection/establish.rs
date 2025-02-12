@@ -1,23 +1,23 @@
 use crate::HashMap;
 
 use crate::common::StatementCache;
-use crate::connection::{sasl, stream::PgStream};
+use crate::connection::{sasl, stream::ClickHouseStream};
 use crate::error::Error;
 use crate::io::StatementId;
 use crate::message::{
     Authentication, BackendKeyData, BackendMessageFormat, Password, ReadyForQuery, Startup,
 };
-use crate::{PgConnectOptions, PgConnection};
+use crate::{ClickHouseConnectOptions, ClickHouseConnection};
 
-use super::PgConnectionInner;
+use super::ClickHouseConnectionInner;
 
 // https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.3
 // https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.11
 
-impl PgConnection {
-    pub(crate) async fn establish(options: &PgConnectOptions) -> Result<Self, Error> {
+impl ClickHouseConnection {
+    pub(crate) async fn establish(options: &ClickHouseConnectOptions) -> Result<Self, Error> {
         // Upgrade to TLS if we were asked to and the server supports it
-        let mut stream = PgStream::connect(options).await?;
+        let mut stream = ClickHouseStream::connect(options).await?;
 
         // To begin a session, a frontend opens a connection to the server
         // and sends a startup message.
@@ -135,8 +135,8 @@ impl PgConnection {
             }
         }
 
-        Ok(PgConnection {
-            inner: Box::new(PgConnectionInner {
+        Ok(ClickHouseConnection {
+            inner: Box::new(ClickHouseConnectionInner {
                 stream,
                 process_id,
                 secret_key,

@@ -133,7 +133,7 @@ fn load_password_from_line(
 ) -> Option<String> {
     let whole_line = line;
 
-    // Pgpass line ordering: hostname, port, database, username, password
+    // ClickHousepass line ordering: hostname, port, database, username, password
     // See: https://www.postgresql.org/docs/9.3/libpq-pgpass.html
     match line.trim_start().chars().next() {
         None | Some('#') => None,

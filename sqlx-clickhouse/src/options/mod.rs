@@ -3,7 +3,7 @@ use std::env::var;
 use std::fmt::{Display, Write};
 use std::path::{Path, PathBuf};
 
-pub use ssl_mode::PgSslMode;
+pub use ssl_mode::ClickHouseSslMode;
 
 use crate::{connection::LogSettings, net::tls::CertificateInput};
 
@@ -12,9 +12,9 @@ mod parse;
 mod pgpass;
 mod ssl_mode;
 
-/// Options and flags which can be used to configure a PostgreSQL connection.
+/// Options and flags which can be used to configure a ClickHouse connection.
 ///
-/// A value of `PgConnectOptions` can be parsed from a connection URL,
+/// A value of `ClickHouseConnectOptions` can be parsed from a connection URL,
 /// as described by [libpq](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING).
 ///
 /// The general form for a connection URL is:
@@ -30,13 +30,13 @@ mod ssl_mode;
 ///
 /// |Parameter|Default|Description|
 /// |---------|-------|-----------|
-/// | `sslmode` | `prefer` | Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated. See [`PgSslMode`]. |
+/// | `sslmode` | `prefer` | Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated. See [`ClickHouseSslMode`]. |
 /// | `sslrootcert` | `None` | Sets the name of a file containing a list of trusted SSL Certificate Authorities. |
 /// | `statement-cache-capacity` | `100` | The maximum number of prepared statements stored in the cache. Set to `0` to disable. |
-/// | `host` | `None` | Path to the directory containing a PostgreSQL unix domain socket, which will be used instead of TCP if set. |
+/// | `host` | `None` | Path to the directory containing a ClickHouse unix domain socket, which will be used instead of TCP if set. |
 /// | `hostaddr` | `None` | Same as `host`, but only accepts IP addresses. |
 /// | `application-name` | `None` | The name will be displayed in the pg_stat_activity view and included in CSV log entries. |
-/// | `user` | result of `whoami` | PostgreSQL user name to connect as. |
+/// | `user` | result of `whoami` | ClickHouse user name to connect as. |
 /// | `password` | `None` | Password to be used if the server demands password authentication. |
 /// | `port` | `5432` | Port number to connect to at the server host, or socket file name extension for Unix-domain connections. |
 /// | `dbname` | `None` | The database name. |
@@ -59,42 +59,42 @@ mod ssl_mode;
 ///
 /// ```rust,no_run
 /// use sqlx::{Connection, ConnectOptions};
-/// use sqlx::postgres::{PgConnectOptions, PgConnection, PgPool, PgSslMode};
+/// use sqlx::postgres::{ClickHouseConnectOptions, ClickHouseConnection, ClickHousePool, ClickHouseSslMode};
 ///
 /// # async fn example() -> sqlx::Result<()> {
 /// // URL connection string
-/// let conn = PgConnection::connect("postgres://localhost/mydb").await?;
+/// let conn = ClickHouseConnection::connect("postgres://localhost/mydb").await?;
 ///
 /// // Manually-constructed options
-/// let conn = PgConnectOptions::new()
+/// let conn = ClickHouseConnectOptions::new()
 ///     .host("secret-host")
 ///     .port(2525)
 ///     .username("secret-user")
 ///     .password("secret-password")
-///     .ssl_mode(PgSslMode::Require)
+///     .ssl_mode(ClickHouseSslMode::Require)
 ///     .connect()
 ///     .await?;
 ///
 /// // Modifying options parsed from a string
-/// let mut opts: PgConnectOptions = "postgres://localhost/mydb".parse()?;
+/// let mut opts: ClickHouseConnectOptions = "postgres://localhost/mydb".parse()?;
 ///
 /// // Change the log verbosity level for queries.
 /// // Information about SQL queries is logged at `DEBUG` level by default.
 /// opts = opts.log_statements(log::LevelFilter::Trace);
 ///
-/// let pool = PgPool::connect_with(opts).await?;
+/// let pool = ClickHousePool::connect_with(opts).await?;
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-pub struct PgConnectOptions {
+pub struct ClickHouseConnectOptions {
     pub(crate) host: String,
     pub(crate) port: u16,
     pub(crate) socket: Option<PathBuf>,
     pub(crate) username: String,
     pub(crate) password: Option<String>,
     pub(crate) database: Option<String>,
-    pub(crate) ssl_mode: PgSslMode,
+    pub(crate) ssl_mode: ClickHouseSslMode,
     pub(crate) ssl_root_cert: Option<CertificateInput>,
     pub(crate) ssl_client_cert: Option<CertificateInput>,
     pub(crate) ssl_client_key: Option<CertificateInput>,
@@ -105,13 +105,13 @@ pub struct PgConnectOptions {
     pub(crate) options: Option<String>,
 }
 
-impl Default for PgConnectOptions {
+impl Default for ClickHouseConnectOptions {
     fn default() -> Self {
         Self::new_without_pgpass().apply_pgpass()
     }
 }
 
-impl PgConnectOptions {
+impl ClickHouseConnectOptions {
     /// Creates a new, default set of options ready for configuration.
     ///
     /// By default, this reads the following environment variables and sets their
@@ -131,8 +131,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new();
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new();
     /// ```
     pub fn new() -> Self {
         Self::new_without_pgpass().apply_pgpass()
@@ -150,7 +150,7 @@ impl PgConnectOptions {
 
         let database = var("PGDATABASE").ok();
 
-        PgConnectOptions {
+        ClickHouseConnectOptions {
             port,
             host,
             socket: None,
@@ -197,8 +197,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .host("localhost");
     /// ```
     pub fn host(mut self, host: &str) -> Self {
@@ -208,13 +208,13 @@ impl PgConnectOptions {
 
     /// Sets the port to connect to at the server host.
     ///
-    /// The default port for PostgreSQL is `5432`.
+    /// The default port for ClickHouse is `5432`.
     ///
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .port(5432);
     /// ```
     pub fn port(mut self, port: u16) -> Self {
@@ -239,8 +239,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .username("postgres");
     /// ```
     pub fn username(mut self, username: &str) -> Self {
@@ -253,8 +253,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .username("root")
     ///     .password("safe-and-secure");
     /// ```
@@ -268,8 +268,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .database("postgres");
     /// ```
     pub fn database(mut self, database: &str) -> Self {
@@ -280,7 +280,7 @@ impl PgConnectOptions {
     /// Sets whether or with what priority a secure SSL TCP/IP connection will be negotiated
     /// with the server.
     ///
-    /// By default, the SSL mode is [`Prefer`](PgSslMode::Prefer), and the client will
+    /// By default, the SSL mode is [`Prefer`](ClickHouseSslMode::Prefer), and the client will
     /// first attempt an SSL connection but fallback to a non-SSL connection on failure.
     ///
     /// Ignored for Unix domain socket communication.
@@ -288,11 +288,11 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
-    /// let options = PgConnectOptions::new()
-    ///     .ssl_mode(PgSslMode::Require);
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
+    /// let options = ClickHouseConnectOptions::new()
+    ///     .ssl_mode(ClickHouseSslMode::Require);
     /// ```
-    pub fn ssl_mode(mut self, mode: PgSslMode) -> Self {
+    pub fn ssl_mode(mut self, mode: ClickHouseSslMode) -> Self {
         self.ssl_mode = mode;
         self
     }
@@ -304,10 +304,10 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_root_cert("./ca-certificate.crt");
     /// ```
     pub fn ssl_root_cert(mut self, cert: impl AsRef<Path>) -> Self {
@@ -320,10 +320,10 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_client_cert("./client.crt");
     /// ```
     pub fn ssl_client_cert(mut self, cert: impl AsRef<Path>) -> Self {
@@ -340,16 +340,16 @@ impl PgConnectOptions {
     /// This is for illustration purposes only.
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
     ///
     /// const CERT: &[u8] = b"\
     /// -----BEGIN CERTIFICATE-----
     /// <Certificate data here.>
     /// -----END CERTIFICATE-----";
     ///    
-    /// let options = PgConnectOptions::new()
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_client_cert_from_pem(CERT);
     /// ```
     pub fn ssl_client_cert_from_pem(mut self, cert: impl AsRef<[u8]>) -> Self {
@@ -362,10 +362,10 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_client_key("./client.key");
     /// ```
     pub fn ssl_client_key(mut self, key: impl AsRef<Path>) -> Self {
@@ -382,16 +382,16 @@ impl PgConnectOptions {
     /// This is for illustration purposes only.
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
     ///
     /// const KEY: &[u8] = b"\
     /// -----BEGIN PRIVATE KEY-----
     /// <Private key data here.>
     /// -----END PRIVATE KEY-----";
     ///
-    /// let options = PgConnectOptions::new()
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_client_key_from_pem(KEY);
     /// ```
     pub fn ssl_client_key_from_pem(mut self, key: impl AsRef<[u8]>) -> Self {
@@ -404,10 +404,10 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgSslMode, PgConnectOptions};
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::{ClickHouseSslMode, ClickHouseConnectOptions};
+    /// let options = ClickHouseConnectOptions::new()
     ///     // Providing a CA certificate with less than VerifyCa is pointless
-    ///     .ssl_mode(PgSslMode::VerifyCa)
+    ///     .ssl_mode(ClickHouseSslMode::VerifyCa)
     ///     .ssl_root_cert_from_pem(vec![]);
     /// ```
     pub fn ssl_root_cert_from_pem(mut self, pem_certificate: Vec<u8>) -> Self {
@@ -431,8 +431,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .application_name("my-app");
     /// ```
     pub fn application_name(mut self, application_name: &str) -> Self {
@@ -445,23 +445,23 @@ impl PgConnectOptions {
     /// This changes the default precision of floating-point values returned in text mode (when
     /// not using prepared statements such as calling methods of [`Executor`] directly).
     ///
-    /// Historically, Postgres would by default round floating-point values to 6 and 15 digits
+    /// Historically, ClickHouse would by default round floating-point values to 6 and 15 digits
     /// for `float4`/`REAL` (`f32`) and `float8`/`DOUBLE` (`f64`), respectively, which would mean
-    /// that the returned value may not be exactly the same as its representation in Postgres.
+    /// that the returned value may not be exactly the same as its representation in ClickHouse.
     ///
     /// The nominal range for this value is `-15` to `3`, where negative values for this option
     /// cause floating-points to be rounded to that many fewer digits than normal (`-1` causes
     /// `float4` to be rounded to 5 digits instead of six, or 14 instead of 15 for `float8`),
-    /// positive values cause Postgres to emit that many extra digits of precision over default
-    /// (or simply use maximum precision in Postgres 12 and later),
+    /// positive values cause ClickHouse to emit that many extra digits of precision over default
+    /// (or simply use maximum precision in ClickHouse 12 and later),
     /// and 0 means keep the default behavior (or the "old" behavior described above
-    /// as of Postgres 12).
+    /// as of ClickHouse 12).
     ///
-    /// SQLx sets this value to 3 by default, which tells Postgres to return floating-point values
+    /// SQLx sets this value to 3 by default, which tells ClickHouse to return floating-point values
     /// at their maximum precision in the hope that the parsed value will be identical to its
-    /// counterpart in Postgres. This is also the default in Postgres 12 and later anyway.
+    /// counterpart in ClickHouse. This is also the default in ClickHouse 12 and later anyway.
     ///
-    /// However, older versions of Postgres and alternative implementations that talk the Postgres
+    /// However, older versions of ClickHouse and alternative implementations that talk the ClickHouse
     /// protocol may not support this option, or the full range of values.
     ///
     /// If you get an error like "unknown option `extra_float_digits`" when connecting, try
@@ -469,8 +469,8 @@ impl PgConnectOptions {
     /// of values.
     ///
     /// For more information, see:
-    /// * [Postgres manual, 20.11.2: Client Connection Defaults; Locale and Formatting][20.11.2]
-    /// * [Postgres manual, 8.1.3: Numeric Types; Floating-point Types][8.1.3]
+    /// * [ClickHouse manual, 20.11.2: Client Connection Defaults; Locale and Formatting][20.11.2]
+    /// * [ClickHouse manual, 8.1.3: Numeric Types; Floating-point Types][8.1.3]
     ///
     /// [`Executor`]: crate::executor::Executor
     /// [20.11.2]: https://www.postgresql.org/docs/current/runtime-config-client.html#RUNTIME-CONFIG-CLIENT-FORMAT
@@ -478,14 +478,14 @@ impl PgConnectOptions {
     ///
     /// ### Examples
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
     ///
-    /// let mut options = PgConnectOptions::new()
-    ///     // for Redshift and Postgres 10
+    /// let mut options = ClickHouseConnectOptions::new()
+    ///     // for Redshift and ClickHouse 10
     ///     .extra_float_digits(2);
     ///
-    /// let mut options = PgConnectOptions::new()
-    ///     // don't send the option at all (Postgres 9 and older)
+    /// let mut options = ClickHouseConnectOptions::new()
+    ///     // don't send the option at all (ClickHouse 9 and older)
     ///     .extra_float_digits(None);
     /// ```
     pub fn extra_float_digits(mut self, extra_float_digits: impl Into<Option<i8>>) -> Self {
@@ -498,8 +498,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .options([("geqo", "off"), ("statement_timeout", "5min")]);
     /// ```
     pub fn options<K, V, I>(mut self, options: I) -> Self
@@ -537,14 +537,14 @@ impl PgConnectOptions {
     }
 }
 
-impl PgConnectOptions {
+impl ClickHouseConnectOptions {
     /// Get the current host.
     ///
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .host("127.0.0.1");
     /// assert_eq!(options.get_host(), "127.0.0.1");
     /// ```
@@ -557,8 +557,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .port(6543);
     /// assert_eq!(options.get_port(), 6543);
     /// ```
@@ -571,8 +571,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .socket("/tmp");
     /// assert!(options.get_socket().is_some());
     /// ```
@@ -585,8 +585,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .username("foo");
     /// assert_eq!(options.get_username(), "foo");
     /// ```
@@ -599,8 +599,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .database("postgres");
     /// assert!(options.get_database().is_some());
     /// ```
@@ -613,11 +613,11 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::{PgConnectOptions, PgSslMode};
-    /// let options = PgConnectOptions::new();
-    /// assert!(matches!(options.get_ssl_mode(), PgSslMode::Prefer));
+    /// # use sqlx_postgres::{ClickHouseConnectOptions, ClickHouseSslMode};
+    /// let options = ClickHouseConnectOptions::new();
+    /// assert!(matches!(options.get_ssl_mode(), ClickHouseSslMode::Prefer));
     /// ```
-    pub fn get_ssl_mode(&self) -> PgSslMode {
+    pub fn get_ssl_mode(&self) -> ClickHouseSslMode {
         self.ssl_mode
     }
 
@@ -626,8 +626,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .application_name("service");
     /// assert!(options.get_application_name().is_some());
     /// ```
@@ -640,8 +640,8 @@ impl PgConnectOptions {
     /// # Example
     ///
     /// ```rust
-    /// # use sqlx_postgres::PgConnectOptions;
-    /// let options = PgConnectOptions::new()
+    /// # use sqlx_postgres::ClickHouseConnectOptions;
+    /// let options = ClickHouseConnectOptions::new()
     ///     .options([("foo", "bar")]);
     /// assert!(options.get_options().is_some());
     /// ```
@@ -671,18 +671,18 @@ fn default_host(port: u16) -> String {
 
 #[test]
 fn test_options_formatting() {
-    let options = PgConnectOptions::new().options([("geqo", "off")]);
+    let options = ClickHouseConnectOptions::new().options([("geqo", "off")]);
     assert_eq!(options.options, Some("-c geqo=off".to_string()));
     let options = options.options([("search_path", "sqlx")]);
     assert_eq!(
         options.options,
         Some("-c geqo=off -c search_path=sqlx".to_string())
     );
-    let options = PgConnectOptions::new().options([("geqo", "off"), ("statement_timeout", "5min")]);
+    let options = ClickHouseConnectOptions::new().options([("geqo", "off"), ("statement_timeout", "5min")]);
     assert_eq!(
         options.options,
         Some("-c geqo=off -c statement_timeout=5min".to_string())
     );
-    let options = PgConnectOptions::new();
+    let options = ClickHouseConnectOptions::new();
     assert_eq!(options.options, None);
 }

@@ -7,10 +7,10 @@ use crate::message::{
     self, BackendMessageFormat, Bind, Close, CommandComplete, DataRow, ParameterDescription, Parse,
     ParseComplete, Query, RowDescription,
 };
-use crate::statement::PgStatementMetadata;
+use crate::statement::ClickHouseStatementMetadata;
 use crate::{
-    statement::PgStatement, PgArguments, PgConnection, PgQueryResult, PgRow, PgTypeInfo,
-    PgValueFormat, Postgres,
+    statement::ClickHouseStatement, ClickHouseArguments, ClickHouseConnection, ClickHouseQueryResult, ClickHouseRow, ClickHouseTypeInfo,
+    ClickHouseValueFormat, ClickHouse,
 };
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
@@ -21,11 +21,11 @@ use sqlx_core::Either;
 use std::{borrow::Cow, pin::pin, sync::Arc};
 
 async fn prepare(
-    conn: &mut PgConnection,
+    conn: &mut ClickHouseConnection,
     sql: &str,
-    parameters: &[PgTypeInfo],
-    metadata: Option<Arc<PgStatementMetadata>>,
-) -> Result<(StatementId, Arc<PgStatementMetadata>), Error> {
+    parameters: &[ClickHouseTypeInfo],
+    metadata: Option<Arc<ClickHouseStatementMetadata>>,
+) -> Result<(StatementId, Arc<ClickHouseStatementMetadata>), Error> {
     let id = conn.inner.next_statement_id;
     conn.inner.next_statement_id = id.next();
 
@@ -85,7 +85,7 @@ async fn prepare(
         // continuing
         conn.wait_until_ready().await?;
 
-        Arc::new(PgStatementMetadata {
+        Arc::new(ClickHouseStatementMetadata {
             parameters,
             columns,
             column_names: Arc::new(column_names),
@@ -95,11 +95,11 @@ async fn prepare(
     Ok((id, metadata))
 }
 
-async fn recv_desc_params(conn: &mut PgConnection) -> Result<ParameterDescription, Error> {
+async fn recv_desc_params(conn: &mut ClickHouseConnection) -> Result<ParameterDescription, Error> {
     conn.inner.stream.recv_expect().await
 }
 
-async fn recv_desc_rows(conn: &mut PgConnection) -> Result<Option<RowDescription>, Error> {
+async fn recv_desc_rows(conn: &mut ClickHouseConnection) -> Result<Option<RowDescription>, Error> {
     let rows: Option<RowDescription> = match conn.inner.stream.recv().await? {
         // describes the rows that will be returned when the statement is eventually executed
         message if message.format == BackendMessageFormat::RowDescription => {
@@ -120,7 +120,7 @@ async fn recv_desc_rows(conn: &mut PgConnection) -> Result<Option<RowDescription
     Ok(rows)
 }
 
-impl PgConnection {
+impl ClickHouseConnection {
     // wait for CloseComplete to indicate a statement was closed
     pub(super) async fn wait_for_close_complete(&mut self, mut count: usize) -> Result<(), Error> {
         // we need to wait for the [CloseComplete] to be returned from the server
@@ -162,13 +162,13 @@ impl PgConnection {
     async fn get_or_prepare<'a>(
         &mut self,
         sql: &str,
-        parameters: &[PgTypeInfo],
+        parameters: &[ClickHouseTypeInfo],
         // should we store the result of this prepare to the cache
         store_to_cache: bool,
         // optional metadata that was provided by the user, this means they are reusing
         // a statement object
-        metadata: Option<Arc<PgStatementMetadata>>,
-    ) -> Result<(StatementId, Arc<PgStatementMetadata>), Error> {
+        metadata: Option<Arc<ClickHouseStatementMetadata>>,
+    ) -> Result<(StatementId, Arc<ClickHouseStatementMetadata>), Error> {
         if let Some(statement) = self.inner.cache_statement.get_mut(sql) {
             return Ok((*statement).clone());
         }
@@ -193,28 +193,28 @@ impl PgConnection {
     pub(crate) async fn run<'e, 'c: 'e, 'q: 'e>(
         &'c mut self,
         query: &'q str,
-        arguments: Option<PgArguments>,
+        arguments: Option<ClickHouseArguments>,
         limit: u8,
         persistent: bool,
-        metadata_opt: Option<Arc<PgStatementMetadata>>,
-    ) -> Result<impl Stream<Item = Result<Either<PgQueryResult, PgRow>, Error>> + 'e, Error> {
+        metadata_opt: Option<Arc<ClickHouseStatementMetadata>>,
+    ) -> Result<impl Stream<Item = Result<Either<ClickHouseQueryResult, ClickHouseRow>, Error>> + 'e, Error> {
         let mut logger = QueryLogger::new(query, self.inner.log_settings.clone());
 
         // before we continue, wait until we are "ready" to accept more queries
         self.wait_until_ready().await?;
 
-        let mut metadata: Arc<PgStatementMetadata>;
+        let mut metadata: Arc<ClickHouseStatementMetadata>;
 
         let format = if let Some(mut arguments) = arguments {
             // Check this before we write anything to the stream.
             //
-            // Note: Postgres actually interprets this value as unsigned,
+            // Note: ClickHouse actually interprets this value as unsigned,
             // making the max number of parameters 65535, not 32767
             // https://github.com/launchbadge/sqlx/issues/3464
             // https://www.postgresql.org/docs/current/limits.html
             let num_params = u16::try_from(arguments.len()).map_err(|_| {
                 err_protocol!(
-                    "PgConnection::run(): too many arguments for query: {}",
+                    "ClickHouseConnection::run(): too many arguments for query: {}",
                     arguments.len()
                 )
             })?;
@@ -237,10 +237,10 @@ impl PgConnection {
             self.inner.stream.write_msg(Bind {
                 portal: PortalId::UNNAMED,
                 statement,
-                formats: &[PgValueFormat::Binary],
+                formats: &[ClickHouseValueFormat::Binary],
                 num_params,
                 params: &arguments.buffer,
-                result_formats: &[PgValueFormat::Binary],
+                result_formats: &[ClickHouseValueFormat::Binary],
             })?;
 
             // executes the portal up to the passed limit
@@ -270,17 +270,17 @@ impl PgConnection {
             self.write_sync();
 
             // prepared statements are binary
-            PgValueFormat::Binary
+            ClickHouseValueFormat::Binary
         } else {
             // Query will trigger a ReadyForQuery
             self.inner.stream.write_msg(Query(query))?;
             self.inner.pending_ready_for_query_count += 1;
 
             // metadata starts out as "nothing"
-            metadata = Arc::new(PgStatementMetadata::default());
+            metadata = Arc::new(ClickHouseStatementMetadata::default());
 
             // and unprepared statements are text
-            PgValueFormat::Text
+            ClickHouseValueFormat::Text
         };
 
         self.inner.stream.flush().await?;
@@ -310,7 +310,7 @@ impl PgConnection {
 
                         let rows_affected = cc.rows_affected();
                         logger.increase_rows_affected(rows_affected);
-                        r#yield!(Either::Left(PgQueryResult {
+                        r#yield!(Either::Left(ClickHouseQueryResult {
                             rows_affected,
                         }));
                     }
@@ -330,7 +330,7 @@ impl PgConnection {
                             .handle_row_description(Some(message.decode()?), false)
                             .await?;
 
-                        metadata = Arc::new(PgStatementMetadata {
+                        metadata = Arc::new(ClickHouseStatementMetadata {
                             column_names: Arc::new(column_names),
                             columns,
                             parameters: Vec::default(),
@@ -342,7 +342,7 @@ impl PgConnection {
 
                         // one of the set of rows returned by a SELECT, FETCH, etc query
                         let data: DataRow = message.decode()?;
-                        let row = PgRow {
+                        let row = ClickHouseRow {
                             data,
                             format,
                             metadata: Arc::clone(&metadata),
@@ -371,13 +371,13 @@ impl PgConnection {
     }
 }
 
-impl<'c> Executor<'c> for &'c mut PgConnection {
-    type Database = Postgres;
+impl<'c> Executor<'c> for &'c mut ClickHouseConnection {
+    type Database = ClickHouse;
 
     fn fetch_many<'e, 'q, E>(
         self,
         mut query: E,
-    ) -> BoxStream<'e, Result<Either<PgQueryResult, PgRow>, Error>>
+    ) -> BoxStream<'e, Result<Either<ClickHouseQueryResult, ClickHouseRow>, Error>>
     where
         'c: 'e,
         E: Execute<'q, Self::Database>,
@@ -403,7 +403,7 @@ impl<'c> Executor<'c> for &'c mut PgConnection {
         })
     }
 
-    fn fetch_optional<'e, 'q, E>(self, mut query: E) -> BoxFuture<'e, Result<Option<PgRow>, Error>>
+    fn fetch_optional<'e, 'q, E>(self, mut query: E) -> BoxFuture<'e, Result<Option<ClickHouseRow>, Error>>
     where
         'c: 'e,
         E: Execute<'q, Self::Database>,
@@ -439,8 +439,8 @@ impl<'c> Executor<'c> for &'c mut PgConnection {
     fn prepare_with<'e, 'q: 'e>(
         self,
         sql: &'q str,
-        parameters: &'e [PgTypeInfo],
-    ) -> BoxFuture<'e, Result<PgStatement<'q>, Error>>
+        parameters: &'e [ClickHouseTypeInfo],
+    ) -> BoxFuture<'e, Result<ClickHouseStatement<'q>, Error>>
     where
         'c: 'e,
     {
@@ -449,7 +449,7 @@ impl<'c> Executor<'c> for &'c mut PgConnection {
 
             let (_, metadata) = self.get_or_prepare(sql, parameters, true, None).await?;
 
-            Ok(PgStatement {
+            Ok(ClickHouseStatement {
                 sql: Cow::Borrowed(sql),
                 metadata,
             })

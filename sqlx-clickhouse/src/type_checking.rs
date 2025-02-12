@@ -1,4 +1,4 @@
-use crate::Postgres;
+use crate::ClickHouse;
 
 // The paths used below will also be emitted by the macros so they have to match the final facade.
 #[allow(unused_imports, dead_code)]
@@ -8,7 +8,7 @@ mod sqlx {
 }
 
 impl_type_checking!(
-        Postgres {
+        ClickHouse {
         (),
         bool,
         String | &str,
@@ -22,23 +22,23 @@ impl_type_checking!(
 
         sqlx::postgres::types::Oid,
 
-        sqlx::postgres::types::PgInterval,
+        sqlx::postgres::types::ClickHouseInterval,
 
-        sqlx::postgres::types::PgMoney,
+        sqlx::postgres::types::ClickHouseMoney,
 
-        sqlx::postgres::types::PgLTree,
+        sqlx::postgres::types::ClickHouseLTree,
 
-        sqlx::postgres::types::PgLQuery,
+        sqlx::postgres::types::ClickHouseLQuery,
 
-        sqlx::postgres::types::PgCube,
+        sqlx::postgres::types::ClickHouseCube,
 
-        sqlx::postgres::types::PgPoint,
+        sqlx::postgres::types::ClickHousePoint,
 
-        sqlx::postgres::types::PgLine,
+        sqlx::postgres::types::ClickHouseLine,
 
-        sqlx::postgres::types::PgLSeg,
+        sqlx::postgres::types::ClickHouseLSeg,
 
-        sqlx::postgres::types::PgBox,
+        sqlx::postgres::types::ClickHouseBox,
 
         #[cfg(feature = "uuid")]
         sqlx::types::Uuid,
@@ -56,7 +56,7 @@ impl_type_checking!(
         sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc> | sqlx::types::chrono::DateTime<_>,
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        sqlx::postgres::types::PgTimeTz<sqlx::types::chrono::NaiveTime, sqlx::types::chrono::FixedOffset>,
+        sqlx::postgres::types::ClickHouseTimeTz<sqlx::types::chrono::NaiveTime, sqlx::types::chrono::FixedOffset>,
 
         #[cfg(feature = "time")]
         sqlx::types::time::Time,
@@ -71,7 +71,7 @@ impl_type_checking!(
         sqlx::types::time::OffsetDateTime,
 
         #[cfg(feature = "time")]
-        sqlx::postgres::types::PgTimeTz<sqlx::types::time::Time, sqlx::types::time::UtcOffset>,
+        sqlx::postgres::types::ClickHouseTimeTz<sqlx::types::time::Time, sqlx::types::time::UtcOffset>,
 
         #[cfg(feature = "bigdecimal")]
         sqlx::types::BigDecimal,
@@ -91,7 +91,7 @@ impl_type_checking!(
         #[cfg(feature = "bit-vec")]
         sqlx::types::BitVec,
 
-        sqlx::postgres::types::PgHstore,
+        sqlx::postgres::types::ClickHouseHstore,
         // Arrays
 
         Vec<bool> | &[bool],
@@ -104,8 +104,8 @@ impl_type_checking!(
         Vec<f32> | &[f32],
         Vec<f64> | &[f64],
         Vec<sqlx::postgres::types::Oid> | &[sqlx::postgres::types::Oid],
-        Vec<sqlx::postgres::types::PgMoney> | &[sqlx::postgres::types::PgMoney],
-        Vec<sqlx::postgres::types::PgInterval> | &[sqlx::postgres::types::PgInterval],
+        Vec<sqlx::postgres::types::ClickHouseMoney> | &[sqlx::postgres::types::ClickHouseMoney],
+        Vec<sqlx::postgres::types::ClickHouseInterval> | &[sqlx::postgres::types::ClickHouseInterval],
 
         #[cfg(feature = "uuid")]
         Vec<sqlx::types::Uuid> | &[sqlx::types::Uuid],
@@ -149,78 +149,78 @@ impl_type_checking!(
         #[cfg(feature = "json")]
         Vec<sqlx::types::JsonValue> | &[sqlx::types::JsonValue],
 
-        Vec<sqlx::postgres::types::PgHstore> | &[sqlx::postgres::types::PgHstore],
+        Vec<sqlx::postgres::types::ClickHouseHstore> | &[sqlx::postgres::types::ClickHouseHstore],
 
         // Ranges
 
-        sqlx::postgres::types::PgRange<i32>,
-        sqlx::postgres::types::PgRange<i64>,
+        sqlx::postgres::types::ClickHouseRange<i32>,
+        sqlx::postgres::types::ClickHouseRange<i64>,
 
         #[cfg(feature = "bigdecimal")]
-        sqlx::postgres::types::PgRange<sqlx::types::BigDecimal>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::BigDecimal>,
 
         #[cfg(feature = "rust_decimal")]
-        sqlx::postgres::types::PgRange<sqlx::types::Decimal>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::Decimal>,
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDate>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDate>,
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDateTime>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDateTime>,
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>> |
-            sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<_>>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>> |
+            sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<_>>,
 
         #[cfg(feature = "time")]
-        sqlx::postgres::types::PgRange<sqlx::types::time::Date>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::time::Date>,
 
         #[cfg(feature = "time")]
-        sqlx::postgres::types::PgRange<sqlx::types::time::PrimitiveDateTime>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::time::PrimitiveDateTime>,
 
         #[cfg(feature = "time")]
-        sqlx::postgres::types::PgRange<sqlx::types::time::OffsetDateTime>,
+        sqlx::postgres::types::ClickHouseRange<sqlx::types::time::OffsetDateTime>,
 
         // Range arrays
 
-        Vec<sqlx::postgres::types::PgRange<i32>> | &[sqlx::postgres::types::PgRange<i32>],
-        Vec<sqlx::postgres::types::PgRange<i64>> | &[sqlx::postgres::types::PgRange<i64>],
+        Vec<sqlx::postgres::types::ClickHouseRange<i32>> | &[sqlx::postgres::types::ClickHouseRange<i32>],
+        Vec<sqlx::postgres::types::ClickHouseRange<i64>> | &[sqlx::postgres::types::ClickHouseRange<i64>],
 
         #[cfg(feature = "bigdecimal")]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::BigDecimal>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::BigDecimal>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::BigDecimal>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::BigDecimal>],
 
         #[cfg(feature = "rust_decimal")]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::Decimal>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::Decimal>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::Decimal>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::Decimal>],
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDate>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDate>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDate>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDate>],
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDateTime>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::chrono::NaiveDateTime>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDateTime>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::NaiveDateTime>],
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<_>>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<_>>],
 
         #[cfg(all(feature = "chrono", not(feature = "time")))]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::chrono::DateTime<_>>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::chrono::DateTime<_>>],
 
         #[cfg(feature = "time")]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::time::Date>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::time::Date>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::time::Date>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::time::Date>],
 
         #[cfg(feature = "time")]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::time::PrimitiveDateTime>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::time::PrimitiveDateTime>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::time::PrimitiveDateTime>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::time::PrimitiveDateTime>],
 
         #[cfg(feature = "time")]
-        Vec<sqlx::postgres::types::PgRange<sqlx::types::time::OffsetDateTime>> |
-            &[sqlx::postgres::types::PgRange<sqlx::types::time::OffsetDateTime>],
+        Vec<sqlx::postgres::types::ClickHouseRange<sqlx::types::time::OffsetDateTime>> |
+            &[sqlx::postgres::types::ClickHouseRange<sqlx::types::time::OffsetDateTime>],
     },
     ParamChecking::Strong,
     feature-types: info => info.__type_feature_gate(),
