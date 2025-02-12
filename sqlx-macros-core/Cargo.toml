@@ -30,6 +30,7 @@ migrate = ["sqlx-core/migrate"]
 mysql = ["sqlx-mysql"]
 postgres = ["sqlx-postgres"]
 sqlite = ["_sqlite", "sqlx-sqlite/bundled"]
+clickhouse = ["sqlx-clickhouse"]
 sqlite-unbundled = ["_sqlite", "sqlx-sqlite/unbundled"]
 
 # type integrations
